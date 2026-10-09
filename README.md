@@ -58,3 +58,8 @@ cd -
 ```
 
 ### próximos pasos
+
+1. Se agregan modelos _base-lines_ para comparar con EmbeddingGemma 2, y se guardan sus métricas en `data/metricas_modelos.csv` (trustworthiness, silhouette, kNN acc).
+   - Base Line 1 : `TF-IDF` : corresponde a un embedding clásico de texto que representa la frecuencia de las palabras en el corpus. Se hace un SVD para reducir la dimensionalidad a 768 dimensiones, para que sea comparable con EmbeddingGemma 2.
+   - Base Line 2 : `BERT` : corresponde a un embedding de texto basado [MiniLM](https://huggingface.co/sentence-transformers/all-MiniLM-L12-v2) que genera representaciones vectoriales de los textos. Es más avanzado que el anterior, pero, en teoría, menos que Gemma2. También se utiliza como marco comparativo. La gran diferencia con Gemma2, es que el espacio es de 384 dimensiones en lugar de 768, lo que implica un poco menos de detalle.
+2. Se observan diferencias en las métricas de los modelos.

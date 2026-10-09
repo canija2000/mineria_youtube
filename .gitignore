@@ -13,3 +13,5 @@ data/*
 !data/projections.parquet
 !data/metricas_text.csv
 !data/metricas_text.png
+!data/metricas_modelos.csv
+context.md
