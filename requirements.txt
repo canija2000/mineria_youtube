@@ -1,0 +1,16 @@
+pandas
+pyarrow
+duckdb
+requests
+python-dotenv
+google-api-python-client
+torch
+transformers>=5.19
+sentence-transformers[image]
+umap-learn
+plotly
+scikit-learn
+ipykernel
+nbformat
+seaborn
+matplotlib

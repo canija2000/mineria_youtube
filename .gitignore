@@ -1,0 +1,15 @@
+# secretos
+.env
+
+# entorno
+.venv/
+__pycache__/
+.ipynb_checkpoints/
+.DS_Store
+*.pdf 
+
+# datos: se ignora todo data/ salvo los resultados livianos para preview.ipynb
+data/*
+!data/projections.parquet
+!data/metricas_text.csv
+!data/metricas_text.png
