@@ -57,9 +57,16 @@ cd -
 .venv/bin/python embed.py       # ~30 min en un M2
 ```
 
-### próximos pasos
+### implementado
 
-1. Se agregan modelos _base-lines_ para comparar con EmbeddingGemma 2, y se guardan sus métricas en `data/metricas_modelos.csv` (trustworthiness, silhouette, kNN acc).
-   - Base Line 1 : `TF-IDF` : corresponde a un embedding clásico de texto que representa la frecuencia de las palabras en el corpus. Se hace un SVD para reducir la dimensionalidad a 768 dimensiones, para que sea comparable con EmbeddingGemma 2.
-   - Base Line 2 : `BERT` : corresponde a un embedding de texto basado [MiniLM](https://huggingface.co/sentence-transformers/all-MiniLM-L12-v2) que genera representaciones vectoriales de los textos. Es más avanzado que el anterior, pero, en teoría, menos que Gemma2. También se utiliza como marco comparativo. La gran diferencia con Gemma2, es que el espacio es de 384 dimensiones en lugar de 768, lo que implica un poco menos de detalle.
-2. Se observan diferencias en las métricas de los modelos.
+1.  Se agregan modelos _base-lines_ para comparar con EmbeddingGemma 2, y se guardan sus métricas en `data/metricas_modelos.csv` (trustworthiness, kNN acc).
+    - Base Line 1 : `TF-IDF` : corresponde a un embedding clásico de texto que representa la frecuencia de las palabras en el corpus. Se hace un SVD para reducir la dimensionalidad a 768 dimensiones, para que sea comparable con EmbeddingGemma 2.
+    - Base Line 2 : `BERT` : corresponde a un embedding de texto basado [MiniLM](https://huggingface.co/sentence-transformers/all-MiniLM-L12-v2) que genera representaciones vectoriales de los textos. Es más avanzado que el anterior, pero, en teoría, menos que Gemma2. También se utiliza como marco comparativo. La gran diferencia con Gemma2, es que el espacio es de 384 dimensiones en lugar de 768.
+2.  Se observan diferencias en las métricas de los modelos.
+3.  - En `preview_images.ipynb` se trabajan con los resultados consolidados del proceso de `multimodal.py` .
+    - `multimodal.py` hace lo siguiente \[muestra de 5000 videos\]:
+      1.  embedding de la imagen $\rightarrow$ `emb_image.parquet`
+      2.  concatenación de `text` + `image` como input a un solo vector $\rightarrow$ `emb_imgtext.parquet`
+      3.  embedding de $3806$ etiquitas de YT-8M $\rightarrow$ `emb_vocab.parquet`
+      4.  zero-shot \[top-10 etiquetas x imagene\] $\rightarrow$ `zeroshot_image.parquet` Las imagenes se obtienen a partir del `youtube_id` \[obtenidos en el proceso anterior\] , a partir de este se solicita el thumbnail del video `https://i.ytimg.com/vi/{youtube_id}/mqdefault.jpg` .
+    - Sobre el _zero-shot_ : dado que el embedding de la imagen y el embedding de las etiquetas están en el mismo espacio vectorial, se puede calcular la similitud entre ellos \[multiplicando las matrices\] y obtener las etiquetas más cercanas a cada imagen. Esto permite etiquetar imágenes sin necesidad de un modelo entrenado específicamente para ello.
