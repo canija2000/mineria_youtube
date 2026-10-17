@@ -1,0 +1,383 @@
+\documentclass[11pt,a4paper]{article}
+
+% ---------- paquetes ----------
+\usepackage[spanish,es-tabla,es-noshorthands,es-nodecimaldot]{babel}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{lmodern}
+\usepackage[margin=2.5cm]{geometry}
+\usepackage{amsmath,amssymb,amsthm}
+\usepackage{booktabs}
+\usepackage{float}  % [H]: figuras y tablas quedan donde se escriben
+\usepackage{graphicx}
+\usepackage{xcolor}
+\usepackage{enumitem}
+\usepackage[hidelinks]{hyperref}
+
+\graphicspath{{figs/}}
+\setlist{itemsep=2pt}
+
+% ---------- utilidades ----------
+% \todo{...}: notas pendientes, en naranjo, para borrar antes de entregar
+\newcommand{\todo}[1]{\textcolor{orange!80!black}{\textbf{[PENDIENTE:} #1\textbf{]}}}
+% \figura{archivo}{ancho}{caption}{label}: si la imagen aún no existe, deja un recuadro
+\newcommand{\figura}[4]{%
+  \begin{figure}[H]
+    \centering
+    \IfFileExists{figs/#1}{\includegraphics[width=#2\linewidth]{#1}}%
+      {\fbox{\parbox[c][4cm][c]{#2\linewidth}{\centering\small\texttt{figs/\detokenize{#1}}\\ (exportar desde el notebook)}}}
+    \caption{#3}\label{#4}
+  \end{figure}}
+
+% ---------- notación ----------
+\newcommand{\R}{\mathbb{R}}
+\newcommand{\Sph}{\mathbb{S}^{767}}
+\newcommand{\Tok}{\mathcal{V}_{\mathrm{tok}}}
+\newcommand{\Img}{\mathcal{S}}
+\newcommand{\Lab}{\mathcal{L}}
+\newcommand{\concat}{\mathbin{\Vert}}
+\newcommand{\simil}{\operatorname{sim}}
+\DeclareMathOperator*{\topk}{top_{\mathit{k}}}
+\DeclareMathOperator{\moda}{moda}
+
+\title{\textbf{Mapeando YouTube fuera de la burbuja}\\[4pt]
+  \large Embeddings multimodales de videos con EmbeddingGemma~2}
+\author{\todo{Integrantes} \\ IIC2433 Minería de Datos — 2026-2}
+\date{\today}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+\todo{Escribir al final (5--6 líneas): problema, datos, método, resultado principal.}
+Representamos 34.788 videos de YouTube en un espacio vectorial común usando EmbeddingGemma~2,
+a partir de su texto (título, tags y descripción) y de su miniatura. Sobre el texto, el modelo
+supera a dos baselines (TF-IDF y MiniLM) en todas las métricas. En una muestra de 5.000 videos,
+la miniatura por sí sola es casi tan informativa como el texto, y su fusión tardía mejora la
+recuperación de la categoría temática (kNN de 0,755 a 0,792). Además, como imagen y texto
+comparten el espacio, la miniatura permite etiquetar videos sin entrenamiento (zero-shot):
+en el 60\,\% de los casos, alguna de las 5 etiquetas predichas es una etiqueta real.
+\end{abstract}
+
+% =====================================================================
+\section{Introducción}
+\todo{Motivación: las plataformas recomiendan contenido cercano a lo que ya consumimos
+(burbujas de filtro). Pregunta: ¿podemos construir un mapa del contenido de YouTube que
+permita, más adelante, recomendar videos \emph{fuera} de esa zona? Contribuciones:
+(1) pipeline de datos YT-8M + API, (2) comparación de representaciones de texto,
+imagen y multimodales, (3) etiquetado zero-shot desde la miniatura.}
+
+% =====================================================================
+\section{Datos}
+
+\subsection{YouTube-8M}
+Usamos la versión~2 (2018) de YouTube-8M~\cite{yt8m}, con $\sim$6,1 millones de videos.
+Del split de entrenamiento descargamos una muestra aleatoria de $\sim$1\,\%: 41 archivos
+(\emph{shards}), seleccionados de forma determinística por el hash MD5 de su nombre.
+
+Sea $\mathcal{I} = \{1, \dots, N\}$ el conjunto de videos de la muestra, con $N = 41.393$.
+Construimos la tabla $Y$, cuya fila $i$ es
+\[
+  y_i = (p_i,\ \ell_i,\ r_i,\ a_i),
+\]
+donde
+\begin{itemize}
+  \item $p_i \in \Sigma^4$ es un identificador anonimizado (\texttt{pid}) de 4 caracteres;
+  \item $\ell_i \subseteq \Lab = \{0, \dots, 3861\}$ es el conjunto de etiquetas temáticas del
+        video, con $|\ell_i| \approx 3$ en promedio;
+  \item $r_i \in \R^{1024}$ es el promedio temporal de las activaciones de una red Inception
+        sobre los frames del video (\texttt{mean\_rgb});
+  \item $a_i \in \R^{128}$ es su análogo para el audio (\texttt{mean\_audio}).
+\end{itemize}
+A cada video le asignamos una \emph{categoría gruesa}
+\[
+  c_i = \moda\{\, \mathrm{Vertical1}(j) : j \in \ell_i \,\},
+\]
+con 25 valores posibles. Esta categoría es la referencia para evaluar las representaciones.
+\todo{Mencionar el desbalance: Arts \& Entertainment y Games concentran la mayoría.}
+
+\subsection{Metadatos desde la YouTube Data API}
+Los \texttt{pid} no son identificadores de YouTube. Existe una función \emph{parcial}
+$\varphi$ (una tabla de traducción publicada por Google) tal que $\varphi(p_i) = v_i$ es el
+identificador real del video. Con $v_i$ consultamos la YouTube Data API~v3 y obtenemos
+\[
+  w_i = (t_i,\ d_i,\ g_i,\ m_i,\ u_i),
+\]
+con título $t_i$, descripción $d_i$, tags $g_i$, estadísticas $m_i$ (vistas, likes,
+comentarios) y la URL de la miniatura $u_i$. A diferencia de $Y$, la tabla $W$ no es un
+espacio vectorial: sus columnas mezclan texto, números y URLs.
+
+No todos los videos sobreviven a estos pasos:
+\[
+  \mathcal{I} \;\supseteq\; \mathcal{I}_\varphi = \{ i : \varphi(p_i) \text{ está definida} \}
+  \;\supseteq\; \mathcal{I}_W = \{ i : w_i \text{ existe} \}.
+\]
+
+\begin{table}[H]
+  \centering
+  \caption{Embudo de datos.}
+  \label{tab:embudo}
+  \begin{tabular}{lrr}
+    \toprule
+    Etapa & Videos & \% \\
+    \midrule
+    Muestra YT-8M ($\mathcal{I}$)                  & 41.393 & 100,0 \\
+    Con ID real de YouTube ($\mathcal{I}_\varphi$) & 37.230 &  89,9 \\
+    Disponibles en YouTube ($\mathcal{I}_W$)       & \textbf{34.788} & \textbf{84,0} \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+En adelante trabajamos sobre $\mathcal{I}_W$, con $n = |\mathcal{I}_W| = 34.788$.
+
+% =====================================================================
+\section{Método}
+
+\subsection{El espacio de embeddings}
+EmbeddingGemma~2~\cite{embgemma2} es un modelo multimodal: recibe secuencias que pueden
+mezclar \emph{tokens} de texto e imágenes, y las lleva a un mismo espacio. Formalmente, sea
+$\Tok$ el vocabulario de tokens del modelo e $\Img$ el conjunto de imágenes RGB. El dominio del
+modelo es el conjunto de secuencias finitas de tokens y/o imágenes, y su codominio es la esfera
+unitaria:
+\[
+  f_\theta : (\Tok \sqcup \Img)^{\le 8192} \longrightarrow \Sph
+  = \{\, x \in \R^{768} : \|x\|_2 = 1 \,\}.
+\]
+Un texto es el caso particular de una secuencia con solo tokens; una imagen, el de una
+secuencia con un solo elemento de $\Img$. Como todos los vectores tienen norma~1, la
+similitud coseno se reduce al producto punto:
+\[
+  \simil(x, x') = \frac{x^\top x'}{\|x\|\,\|x'\|} = x^\top x'.
+\]
+
+\paragraph{Texto.}
+Definimos $\tau(w_i)$ como el título, seguido de hasta 15 tags y los primeros 600 caracteres
+de la descripción sin URLs. El modelo recibe además un prefijo fijo que indica la tarea,
+$\pi_{\mathrm{clust}} = $ \texttt{"task: clustering | query: "}. Con $\concat$ la
+concatenación de strings,
+\[
+  x_i^{T} = f_\theta\big(\pi_{\mathrm{clust}} \concat \tau(w_i)\big), \qquad
+  X^{T} = \begin{bmatrix} x_1^{T} \\ \vdots \\ x_n^{T} \end{bmatrix} \in \R^{n \times 768}.
+\]
+El texto se trunca a 256 tokens, lo que afecta al 2,9\,\% de los videos.
+
+\paragraph{Imagen.}
+Sea $s_i \in \{0, \dots, 255\}^{180 \times 320 \times 3}$ la miniatura del video. Sobre una
+submuestra aleatoria $\mathcal{I}_S \subset \mathcal{I}_W$ con $|\mathcal{I}_S| = 5.000$,
+\[
+  x_i^{I} = f_\theta(s_i), \qquad X^{I} \in \R^{5000 \times 768}.
+\]
+Usamos 70 tokens visuales por imagen (el valor por defecto es 280), lo que es 5 veces más
+rápido y cambia poco el vector (similitud 0,986 con la versión de 280 tokens).
+
+\paragraph{Combinaciones de texto e imagen.}
+Probamos dos formas de juntar ambas fuentes:
+\[
+  \underbrace{x_i^{IT} = f_\theta\big(\pi_{\mathrm{clust}} \concat s_i \concat \tau(w_i)\big)}_{\text{fusión temprana: un solo input}}
+  \qquad\qquad
+  \underbrace{x_i^{F} = \frac{x_i^{T} + x_i^{I}}{\big\|x_i^{T} + x_i^{I}\big\|_2}}_{\text{fusión tardía: suma de vectores}}
+\]
+
+\subsection{Baselines de texto}
+Para justificar el uso de EmbeddingGemma~2, embebimos el mismo texto $\tau(w_i)$ con:
+\begin{itemize}
+  \item \textbf{TF-IDF + SVD}: vectores de frecuencia de palabras (vocabulario de 50.000
+        términos) comprimidos a 768 dimensiones con SVD truncado (LSA).
+  \item \textbf{MiniLM}~\cite{sbert,sbert-multi}: modelo Sentence-BERT multilingüe\footnote{\texttt{sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2}.},
+        de 384 dimensiones y 128 tokens
+        como máximo.
+\end{itemize}
+
+\subsection{Zero-shot desde la miniatura}
+Sea $L \in \R^{3806 \times 768}$ la matriz cuya fila $j$ es $f_\theta(\mathrm{nombre}_j)$, el
+embedding del nombre de la etiqueta $j$ como texto. Como $X^{I}$ y $L$ viven en el mismo
+espacio,
+\[
+  S = X^{I} L^{\top} \in \R^{5000 \times 3806}, \qquad
+  S_{ij} = \simil(\text{imagen}_i,\ \text{etiqueta}_j).
+\]
+La predicción para la imagen $i$ son las $k$ etiquetas de mayor similitud, y medimos si
+alguna es correcta:
+\[
+  \hat{\ell}_i^{(k)} = \topk_{j}\, S_{ij}, \qquad
+  \text{hit@}k = \frac{1}{|\mathcal{I}_S|} \sum_{i \in \mathcal{I}_S}
+  \mathbf{1}\big[\, \hat{\ell}_i^{(k)} \cap \ell_i \neq \varnothing \,\big].
+\]
+
+\subsection{Proyección y evaluación}
+Para visualizar usamos UMAP~\cite{umap} $U : \Sph \to \R^3$ (métrica coseno, 15 vecinos),
+opcionalmente precedido de PCA a 282 componentes, que retienen el 90\,\% de la varianza.
+Cada representación $X$ se evalúa con:
+\begin{itemize}
+  \item \textbf{kNN accuracy}: qué tan bien los 15 vecinos más cercanos de $x_i$ predicen
+        $c_i$ (validación cruzada de 5 folds), en el espacio original y en $U(X)$;
+  \item \textbf{NMI}: información mutua normalizada entre los clusters de K-Means ($k = 25$)
+        sobre $U(X)$ y las categorías $c$;
+  \item \textbf{Trustworthiness}~\cite{trust}: qué tan fieles son los vecindarios de $U(X)$
+        a los de $X$.
+\end{itemize}
+Como referencia mínima usamos el clasificador de mayoría (siempre predecir la categoría más
+frecuente).
+
+% =====================================================================
+\section{Resultados}
+
+\subsection{Texto: EmbeddingGemma 2 frente a los baselines}
+
+\begin{table}[H]
+  \centering
+  \caption{Representaciones de texto sobre los 34.788 videos.}
+  \label{tab:texto}
+  \small
+  \begin{tabular}{lrrrrr}
+    \toprule
+    Modelo & Dims & kNN original & kNN UMAP & NMI (UMAP) & Trustworthiness \\
+    \midrule
+    TF-IDF + SVD     & 768 & 0,605 & 0,558 & 0,132 & 0,870 \\
+    MiniLM           & 384 & 0,693 & 0,669 & 0,294 & 0,887 \\
+    EmbeddingGemma 2 & 768 & \textbf{0,793} & \textbf{0,764} & \textbf{0,360} & \textbf{0,957} \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\todo{Comentar: el orden se mantiene en todas las métricas; +19 puntos de kNN sobre TF-IDF
+y +10 sobre MiniLM; NMI casi triplica a TF-IDF.}
+
+\figura{metricas_modelos.png}{0.95}{Comparación de modelos de embedding de texto.}{fig:metricas-modelos}
+
+\begin{table}[H]
+  \centering
+  \caption{Proyecciones de EmbeddingGemma 2 (texto).}
+  \label{tab:proyecciones}
+  \begin{tabular}{lrrrr}
+    \toprule
+    Proyección & Trustworthiness & Silhouette & kNN & NMI \\
+    \midrule
+    PCA 3D              & 0,830 & $-0{,}160$ & 0,638 & 0,323 \\
+    UMAP 3D             & 0,957 & $-0{,}163$ & 0,764 & 0,360 \\
+    PCA 282 + UMAP 3D   & \textbf{0,958} & $-0{,}174$ & 0,771 & \textbf{0,367} \\
+    Original (768 dims) & --    & $0{,}008$  & \textbf{0,793} & 0,351 \\
+    Mayoría             & --    & --         & 0,346 & -- \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\todo{PCA en 3D retiene solo el 11,2\,\% de la varianza. Explicar el silhouette negativo:
+coherencia local (kNN) sin separación global de categorías gruesas.}
+
+\figura{metricas_text.png}{0.95}{Calidad de las proyecciones de EmbeddingGemma 2.}{fig:metricas-texto}
+
+\subsection{Texto, imagen y fusión}
+
+\begin{table}[H]
+  \centering
+  \caption{Comparación sobre la submuestra de 5.000 videos ($\mathcal{I}_S$).}
+  \label{tab:multimodal}
+  \begin{tabular}{lrrr}
+    \toprule
+    Representación & kNN original & kNN UMAP & NMI (UMAP) \\
+    \midrule
+    Mayoría                       & 0,346 & -- & -- \\
+    TF-IDF + SVD                  & 0,564 & 0,509 & 0,138 \\
+    MiniLM                        & 0,635 & 0,622 & 0,286 \\
+    Texto, $X^{T}$                & 0,755 & 0,726 & 0,376 \\
+    Imagen, $X^{I}$               & 0,742 & 0,732 & 0,392 \\
+    Fusión temprana, $X^{IT}$     & 0,770 & 0,736 & 0,362 \\
+    Fusión tardía, $X^{F}$        & \textbf{0,792} & \textbf{0,784} & \textbf{0,462} \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\todo{Comentar: la miniatura sola casi iguala al texto; la fusión tardía es la mejor y no
+cuesta cómputo extra; la temprana apenas mejora al texto (hipótesis: el texto domina el input).
+Advertir que los valores son menores que en la Tabla~\ref{tab:texto} por el tamaño de la muestra.}
+
+\figura{metricas_multimodal.png}{0.95}{Texto frente a imagen y fusión.}{fig:metricas-multimodal}
+\figura{vecinos.png}{0.95}{Vecinos más cercanos de un video en los espacios de texto, imagen y fusión.}{fig:vecinos}
+
+\subsection{Zero-shot}
+
+\begin{table}[H]
+  \centering
+  \caption{Etiquetado zero-shot desde la miniatura (3.806 etiquetas candidatas).}
+  \label{tab:zeroshot}
+  \begin{tabular}{lrrr}
+    \toprule
+    & hit@1 & hit@5 & hit@10 \\
+    \midrule
+    Imagen, $X^{I}$ & 32,2\,\% & 59,7\,\% & 70,7\,\% \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\figura{zeroshot_hitk.png}{0.7}{Fracción de videos con al menos una etiqueta real entre las $k$ predichas.}{fig:hitk}
+\figura{zeroshot_galeria.png}{0.95}{Ejemplos de etiquetado zero-shot (\checkmark{} = etiqueta real).}{fig:zeroshot}
+
+% =====================================================================
+\section{Discusión}
+\todo{Desarrollar cada punto:}
+\begin{itemize}
+  \item \textbf{Brecha de modalidad}~\cite{modalitygap}: la similitud media imagen--imagen es
+        0,67 y la imagen--texto, 0,55; en un UMAP conjunto forman dos islas separadas, que se
+        juntan al centrar cada modalidad.
+  \item \textbf{Sesgo por idioma}: TF-IDF agrupa por idioma más que por tema.
+  \item \textbf{Fusión tardía frente a temprana}.
+  \item \textbf{Etiquetas gruesas}: \texttt{Vertical1} subestima la calidad de las representaciones.
+\end{itemize}
+
+\section{Limitaciones}
+\begin{itemize}
+  \item Las imágenes se evaluaron sobre una submuestra de 5.000 videos.
+  \item Las etiquetas de YT-8M son automáticas y podrían usar metadatos del video, lo que
+        favorecería a los embeddings de texto. \todo{verificar en~\cite{yt8m}}
+  \item Truncación de texto (256 tokens en Gemma~2, 128 en MiniLM).
+  \item El 16\,\% de los videos ya no está disponible, lo que puede sesgar la muestra.
+\end{itemize}
+
+\section{Trabajo futuro}
+\begin{itemize}
+  \item HDBSCAN sobre UMAP y sensibilidad a \texttt{n\_neighbors}.
+  \item Embeber las miniaturas de los 34.788 videos.
+  \item Recomendador \emph{fuera de la burbuja}, evaluado con novedad, diversidad y cobertura.
+  \item Análisis causal: efecto del tema o de la miniatura sobre las vistas.
+\end{itemize}
+
+% =====================================================================
+\begin{thebibliography}{9}
+\bibitem{yt8m}
+  S.~Abu-El-Haija \emph{et al.}
+  YouTube-8M: A Large-Scale Video Classification Benchmark.
+  \emph{arXiv:1609.08675}, 2016.
+
+\bibitem{embgemma2}
+  Google DeepMind.
+  EmbeddingGemma 2 (model card).
+  \url{https://huggingface.co/google/embeddinggemma-2}.
+
+\bibitem{sbert}
+  N.~Reimers e I.~Gurevych.
+  Sentence-BERT: Sentence Embeddings using Siamese BERT-Networks.
+  \emph{EMNLP}, 2019.
+
+\bibitem{sbert-multi}
+  N.~Reimers e I.~Gurevych.
+  Making Monolingual Sentence Embeddings Multilingual using Knowledge Distillation.
+  \emph{EMNLP}, 2020.
+
+\bibitem{umap}
+  L.~McInnes, J.~Healy y J.~Melville.
+  UMAP: Uniform Manifold Approximation and Projection for Dimension Reduction.
+  \emph{arXiv:1802.03426}, 2018.
+
+\bibitem{trust}
+  J.~Venna y S.~Kaski.
+  Neighborhood Preservation in Nonlinear Projection Methods: An Experimental Study.
+  \emph{ICANN}, 2001.
+
+\bibitem{modalitygap}
+  W.~Liang \emph{et al.}
+  Mind the Gap: Understanding the Modality Gap in Multi-modal Contrastive Representation Learning.
+  \emph{NeurIPS}, 2022.
+\end{thebibliography}
+
+\end{document}

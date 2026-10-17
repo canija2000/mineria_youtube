@@ -1,4 +1,4 @@
 modelo,dims,knn_acc_original,knn_acc_umap,NMI_kmeans_umap,trustworthiness
-TF-IDF,768,0.605,0.558,0.132,0.87
+TF-IDF,768,0.605,0.557,0.143,0.866
 MiniLM,384,0.693,0.669,0.294,0.887
 EmbeddingGemma 2,768,0.793,0.764,0.36,0.957
