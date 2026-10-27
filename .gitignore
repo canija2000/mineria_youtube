@@ -24,3 +24,6 @@ informe/*
 !informe/figs/
 *.pptx
 *.mp4
+
+# entregas (presentaciones, videos, pauta): fuera del control de versiones
+entregas/

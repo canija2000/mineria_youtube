@@ -5,8 +5,9 @@ Etapas (ambas reanudables, guardan caché en data/):
   2. hydrate: youtube_id -> metadata API -> data/yt8m_hydrated.parquet
 
 Uso:
-  python3 hydrate.py              # todo el sample
-  python3 hydrate.py --limit 200  # prueba chica
+  python3 -m recolect.youtube              # todo el sample
+  python3 -m recolect.youtube --limit 200  # prueba chica
+  (la corrida completa parte en `python3 recolect.py`)
 """
 
 import argparse

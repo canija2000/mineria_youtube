@@ -360,7 +360,9 @@ class VideoCatalog:
             self.vectors = np.vstack((self.vectors, vector.reshape(1, -1)))
             self.coordinates = np.vstack((self.coordinates, coordinate.reshape(1, -1)))
             self.in_map = np.append(self.in_map, False)
-            self._last_store_count = self.store.count()
+            # Solo cuenta el video recién agregado: si entró un lote por fuera (`--modern`),
+            # el total de SQLite sigue distinto y el próximo refresh_map() lo carga.
+            self._last_store_count += 1
             return self.describe(video_id)
 
     def describe(self, video_id, neighbor_count=12):
