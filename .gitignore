@@ -22,3 +22,5 @@ informe/*
 !informe/*.tex
 !informe/main.pdf
 !informe/figs/
+*.pptx
+*.mp4

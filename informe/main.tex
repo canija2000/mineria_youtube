@@ -322,14 +322,19 @@ Advertir que los valores son menores que en la Tabla~\ref{tab:texto} por el tama
         juntan al centrar cada modalidad.
   \item \textbf{Sesgo por idioma}: TF-IDF agrupa por idioma más que por tema.
   \item \textbf{Fusión tardía frente a temprana}.
-  \item \textbf{Etiquetas gruesas}: \texttt{Vertical1} subestima la calidad de las representaciones.
 \end{itemize}
 
 \section{Limitaciones}
 \begin{itemize}
   \item Las imágenes se evaluaron sobre una submuestra de 5.000 videos.
-  \item Las etiquetas de YT-8M son automáticas y podrían usar metadatos del video, lo que
-        favorecería a los embeddings de texto. \todo{verificar en~\cite{yt8m}}
+  \item Las etiquetas de YT-8M fueron generadas por el sistema de anotación de YouTube a partir
+        de ``señales humanas, incluyendo metadatos y clics de búsqueda''~\cite{yt8m}. Como en parte
+        provienen del texto del video, la evaluación podría favorecer a los embeddings de texto
+        frente a los de imagen.
+  \item La categoría $c_i$ es gruesa (25 valores) y es una sola por video, aunque el video tenga
+        varias etiquetas: un video de un juego de carreras puede ser \emph{Games} o
+        \emph{Autos \& Vehicles}. Las métricas basadas en $c_i$ son, por lo tanto, una cota
+        inferior de la calidad de las representaciones.
   \item Truncación de texto (256 tokens en Gemma~2, 128 en MiniLM).
   \item El 16\,\% de los videos ya no está disponible, lo que puede sesgar la muestra.
 \end{itemize}
