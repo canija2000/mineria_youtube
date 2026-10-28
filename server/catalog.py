@@ -86,6 +86,7 @@ class VideoCatalog:
         self.image_meta: dict = {}
         self.image_cluster_ids: np.ndarray | None = None
         self.image_cluster_names: list[str] = []
+        self.image_centroids: np.ndarray | None = None
         self._load_image_space()
 
         self.map_meta: dict = {}
@@ -194,7 +195,7 @@ class VideoCatalog:
                     added += 1
                     if added >= 6:
                         break
-        return results
+        return sorted(results, key=lambda r: -r["score"])
 
     # ---------- carga del mapa y armado del catálogo ----------
 
@@ -214,7 +215,7 @@ class VideoCatalog:
         self.image_coordinates = coords.loc[keep, ["x", "y", "z"]].to_numpy(dtype=np.float32)
         loaded = map_clusters.load(maps_dir(self.data_dir, "image") / meta["version"])
         if loaded:
-            table, _centroids, summary = loaded
+            table, self.image_centroids, summary = loaded
             cluster_of = dict(zip(table["youtube_id"], table["cluster"]))
             self.image_cluster_ids = np.array([cluster_of.get(i, -1) for i in self.image_ids], dtype=np.int16)
             self.image_cluster_names = [c["name"] for c in sorted(summary, key=lambda c: c["id"])]
@@ -279,6 +280,23 @@ class VideoCatalog:
         if not self.map_clusters:
             return -1
         return int(np.argmax(self.map_clusters[1] @ vector))
+
+    def _cluster_at(self, i: int, space: str = "text") -> str | None:
+        """Nombre del grupo HDBSCAN del punto i del espacio (texto o imagen)."""
+        ids, names = ((self.image_cluster_ids, self.image_cluster_names) if space == "image"
+                      else (self.cluster_ids, self.cluster_names))
+        if ids is None or not names or ids[i] < 0:
+            return None
+        return names[int(ids[i])]
+
+    def _nearest_cluster(self, vector: np.ndarray, space: str = "text") -> str | None:
+        """Grupo HDBSCAN de un vector que no está en el mapa: el del centroide más parecido."""
+        if space == "image":
+            if self.image_centroids is None or not self.image_cluster_names:
+                return None
+            return self.image_cluster_names[int(np.argmax(self.image_centroids @ vector))]
+        k = self._cluster_for(vector)
+        return self.cluster_names[k] if k >= 0 else None
 
     def refresh_map(self):
         """Si `remap.py` publicó un mapa nuevo o entraron lotes en SQLite (`--modern`), actualiza el catálogo."""
@@ -462,6 +480,7 @@ class VideoCatalog:
                     "youtube_id": video_id,
                     **self.metadata.get(video_id, {}),
                     "vertical": self.verticals.get(video_id),
+                    "cluster": self._cluster_at(position),
                     "predicted_vertical": predicted_vertical,
                     "knn_votes": knn_votes,
                     "zero_shot_tags": zero_shot_tags,
@@ -472,6 +491,7 @@ class VideoCatalog:
                 "neighbors": [
                     {"youtube_id": self.ids[i], **self.metadata.get(self.ids[i], {}),
                      "vertical": self.verticals.get(self.ids[i]),
+                     "cluster": self._cluster_at(i),
                      "similarity": float(similarities[i]),
                      "projection": self.coordinates[i].astype(float).tolist()}
                     for i in nearest
@@ -479,6 +499,7 @@ class VideoCatalog:
                 "farthest": [
                     {"youtube_id": self.ids[i], **self.metadata.get(self.ids[i], {}),
                      "vertical": self.verticals.get(self.ids[i]),
+                     "cluster": self._cluster_at(i),
                      "similarity": float(similarities[i]),
                      "projection": self.coordinates[i].astype(float).tolist()}
                     for i in farthest
@@ -563,6 +584,8 @@ class VideoCatalog:
                     "youtube_id": video_id,
                     **self.metadata.get(video_id, {}),
                     "vertical": self.verticals.get(video_id),
+                    "cluster": (self._cluster_at(self.image_positions[video_id], "image") if in_image_map
+                                else self._nearest_cluster(vec, "image")),
                     "predicted_vertical": predicted_vertical,
                     "knn_votes": knn_votes,
                     "zero_shot_tags": self._predict_zero_shot(vec),
@@ -575,6 +598,7 @@ class VideoCatalog:
                         "youtube_id": self.image_ids[i],
                         **self.metadata.get(self.image_ids[i], {}),
                         "vertical": self.verticals.get(self.image_ids[i]),
+                        "cluster": self._cluster_at(i, "image"),
                         "similarity": float(similarities[i]),
                         "projection": self.image_coordinates[i].astype(float).tolist(),
                     }
@@ -585,6 +609,7 @@ class VideoCatalog:
                         "youtube_id": self.image_ids[i],
                         **self.metadata.get(self.image_ids[i], {}),
                         "vertical": self.verticals.get(self.image_ids[i]),
+                        "cluster": self._cluster_at(i, "image"),
                         "similarity": float(similarities[i]),
                         "projection": self.image_coordinates[i].astype(float).tolist(),
                     }
@@ -653,12 +678,14 @@ class VideoCatalog:
                     "predicted_vertical": predicted_vertical,
                     "knn_votes": knn_votes,
                     "zero_shot_tags": self._predict_zero_shot(q),
+                    "cluster": self._nearest_cluster(q),
                 },
                 "projection": centroid,
                 "region_points": [self.coordinates[i].astype(float).tolist() for i in region_idx],
                 "neighbors": [
                     {"youtube_id": self.ids[i], **self.metadata.get(self.ids[i], {}),
                      "vertical": self.verticals.get(self.ids[i]),
+                     "cluster": self._cluster_at(i),
                      "similarity": float(similarities[i]),
                      "projection": self.coordinates[i].astype(float).tolist()}
                     for i in nearest
@@ -666,6 +693,7 @@ class VideoCatalog:
                 "farthest": [
                     {"youtube_id": self.ids[i], **self.metadata.get(self.ids[i], {}),
                      "vertical": self.verticals.get(self.ids[i]),
+                     "cluster": self._cluster_at(i),
                      "similarity": float(similarities[i]),
                      "projection": self.coordinates[i].astype(float).tolist()}
                     for i in farthest
@@ -688,10 +716,12 @@ class VideoCatalog:
                 ids_pool = self.image_ids
                 coords_pool = self.image_coordinates
                 similarities = self.image_vectors @ vec
+                space = "image"
             else:
                 ids_pool = self.ids
                 coords_pool = self.coordinates
                 similarities = self.vectors @ vec
+                space = "text"
 
             nearest = np.argsort(-similarities)[:neighbor_count]
             top_k = nearest[:15]
@@ -740,6 +770,7 @@ class VideoCatalog:
                     "predicted_vertical": predicted_vertical,
                     "knn_votes": knn_votes,
                     "zero_shot_tags": self._predict_zero_shot(vec),
+                    "cluster": self._nearest_cluster(vec, space),
                     "persisted": False,
                 },
                 "projection": coord,
@@ -748,6 +779,7 @@ class VideoCatalog:
                         "youtube_id": ids_pool[i],
                         **self.metadata.get(ids_pool[i], {}),
                         "vertical": self.verticals.get(ids_pool[i]),
+                        "cluster": self._cluster_at(i, space),
                         "similarity": float(similarities[i]),
                         "projection": coords_pool[i].astype(float).tolist(),
                     }
@@ -758,6 +790,7 @@ class VideoCatalog:
                         "youtube_id": ids_pool[i],
                         **self.metadata.get(ids_pool[i], {}),
                         "vertical": self.verticals.get(ids_pool[i]),
+                        "cluster": self._cluster_at(i, space),
                         "similarity": float(similarities[i]),
                         "projection": coords_pool[i].astype(float).tolist(),
                     }
@@ -851,6 +884,7 @@ class VideoCatalog:
                     "cohesion": round(cohesion, 3),
                     "knn_votes": knn_votes,
                     "zero_shot_tags": self._predict_zero_shot(centroid_vec),
+                    "cluster": self._nearest_cluster(centroid_vec),
                 },
                 "projection": centroid_3d,
                 "profile_videos": [
@@ -858,6 +892,9 @@ class VideoCatalog:
                         "youtube_id": v.get("youtube_id"),
                         "title": v.get("title"),
                         "vertical": video_cats[k],
+                        "cluster": (self._cluster_at(self.positions[str(v.get("youtube_id", ""))])
+                                    if str(v.get("youtube_id", "")) in self.positions
+                                    else self._nearest_cluster(vecs[k])),
                         "similarity": float(vecs[k] @ centroid_vec),
                         "projection": prof_coords[k].astype(float).tolist(),
                     }
@@ -868,6 +905,7 @@ class VideoCatalog:
                         "youtube_id": self.ids[i],
                         **self.metadata.get(self.ids[i], {}),
                         "vertical": self.verticals.get(self.ids[i]),
+                        "cluster": self._cluster_at(i),
                         "similarity": float(similarities[i]),
                         "projection": self.coordinates[i].astype(float).tolist(),
                     }
@@ -878,6 +916,7 @@ class VideoCatalog:
                         "youtube_id": self.ids[i],
                         **self.metadata.get(self.ids[i], {}),
                         "vertical": self.verticals.get(self.ids[i]),
+                        "cluster": self._cluster_at(i),
                         "similarity": float(similarities[i]),
                         "projection": self.coordinates[i].astype(float).tolist(),
                     }

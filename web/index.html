@@ -614,6 +614,7 @@ const PALETTE = ['#4DA3FF', '#E2A336', '#D96B62', '#68B87A', '#9D7FE8', '#D97EB0
   '#2F7FD8', '#B97F1E', '#B04A42', '#478F57', '#7558C4', '#B0588A', '#2F928B', '#B85F37', '#5E74C4', '#9C9640'];
 // Colorear por categoría de YouTube ('vertical') o por grupo HDBSCAN ('cluster')
 let colorMode = 'vertical';
+let currentRenderer = null;   // función que dibujó el panel derecho actual (para re-dibujarlo)
 const nColored = () => colorMode === 'cluster' ? PALETTE.length : 10;
 const OTHER = '#4B5563';
 const colorOf = c => c < nColored() ? PALETTE[c] : OTHER;
@@ -781,6 +782,7 @@ function setColorMode(mode) {
   document.getElementById('cb-cluster').classList.toggle('on', mode === 'cluster');
   applyColorMode();
   applyCategoryFilter(null);     // quita el filtro y repinta todos los puntos con la nueva partición
+  if (currentVideoData && currentRenderer) currentRenderer(currentVideoData);   // el panel también cambia
 }
 
 function applyMapPayload(data, rep) {
@@ -1137,12 +1139,15 @@ function line(a, b, color, opacity) {
   return new THREE.Line(g, new THREE.LineBasicMaterial({ color, transparent: true, opacity }));
 }
 
+// Votos de los vecinos: por categoría de YouTube (los calcula el servidor) o, con
+// "Colorear por HDBSCAN", por el grupo de cada vecino. `vertical` guarda el nombre ganador.
 function computeKnnVotes(vid, neighbors) {
-  if (vid && vid.knn_votes && vid.knn_votes.vertical) return vid.knn_votes;
+  const byCluster = colorMode === 'cluster';
+  if (!byCluster && vid && vid.knn_votes && vid.knn_votes.vertical) return vid.knn_votes;
   const counts = {};
   let total = 0;
   (neighbors || []).forEach(nb => {
-    const v = nb.vertical;
+    const v = byCluster ? nb.cluster : nb.vertical;
     if (v && v !== '(Sin categoría)') {
       counts[v] = (counts[v] || 0) + 1;
       total++;
@@ -1161,7 +1166,7 @@ function computeKnnVotes(vid, neighbors) {
 
 // Etiquetas zero-shot: las calcula el servidor (vocabulario YT-8M + folksonomía).
 function inferClientZeroShot(item) {
-  return (item && item.zero_shot_tags) || [];
+  return ((item && item.zero_shot_tags) || []).slice().sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
 }
 
 function renderRelationOverlay(targetPos, list, isFar) {
@@ -1224,7 +1229,7 @@ function renderNeighborCards(list, isFar) {
     const nbYid = nb.youtube_id;
     const nbUrl = `https://www.youtube.com/watch?v=${nbYid}`;
     const nbThumb = nb.thumbnail_url || `https://i.ytimg.com/vi/${nbYid}/mqdefault.jpg`;
-    const nbVert = nb.vertical || '';
+    const nbVert = (colorMode === 'cluster' ? nb.cluster : nb.vertical) || '';
     const nbCh = nb.channel_title || '';
     const nbViews = nb.view_count != null ? `${nb.view_count.toLocaleString('es-CL')} vistas` : '';
     const nbDur = nb.duration ? fmtDur(nb.duration).txt : '';
@@ -1300,6 +1305,7 @@ function showRealVideoResult(data) {
   const yid = vid.youtube_id;
 
   currentVideoData = data;
+  currentRenderer = showRealVideoResult;
   currentTargetPos = targetPos;
   currentRelTab = 'nearest';
   data._farthestList = data.farthest || [];
@@ -1323,10 +1329,13 @@ function showRealVideoResult(data) {
   const thumbUrl = vid.thumbnail_url || `https://i.ytimg.com/vi/${yid}/mqdefault.jpg`;
   const knn = computeKnnVotes(vid, data.neighbors || []);
   const zsTags = inferClientZeroShot(vid, data.neighbors || []);
-  const hasRealVert = Boolean(vid.vertical && vid.vertical !== '(Sin categoría)');
-  const primaryVert = hasRealVert ? vid.vertical : (knn.vertical || 'Sin clasificar');
+  const byCluster = colorMode === 'cluster';
+  const own = byCluster ? vid.cluster : vid.vertical;
+  const hasRealVert = Boolean(own && own !== '(Sin categoría)');
+  const primaryVert = hasRealVert ? own : (knn.vertical || 'Sin clasificar');
+  const source = byCluster ? 'HDBSCAN' : 'YT-8M';
   const vertMethod = hasRealVert
-    ? (knn.vertical ? `YT-8M · kNN ${knn.count}/${knn.total}` : 'YT-8M')
+    ? (knn.vertical ? `${source} · kNN ${knn.count}/${knn.total}` : source)
     : (knn.vertical ? `kNN · ${knn.count}/${knn.total} vecinos` : '');
 
   const viewsStr = vid.view_count != null ? vid.view_count.toLocaleString('es-CL') : '—';
@@ -1371,7 +1380,7 @@ function showRealVideoResult(data) {
     <!-- COMPONENTE 2: Clasificación temática y conceptos asociados al Zero-Shot -->
     <section class="panel-card">
       <div class="cat-header">
-        <h4>2 · Clasificación temática</h4>
+        <h4>2 · ${byCluster ? 'Grupo HDBSCAN' : 'Clasificación temática'}</h4>
         <span class="cat-method">${vertMethod}</span>
       </div>
       <div class="cat-primary">
@@ -1448,6 +1457,7 @@ function showConceptResult(data) {
   const queryStr = concept.query || q.value.trim();
 
   currentVideoData = data;
+  currentRenderer = showConceptResult;
   currentTargetPos = targetPos;
   currentRelTab = 'nearest';
   data._farthestList = data.farthest || [];
@@ -1492,12 +1502,12 @@ function showConceptResult(data) {
 
     <section class="panel-card">
       <div class="cat-header">
-        <h4>2 · Clasificación temática (kNN)</h4>
+        <h4>2 · ${colorMode === 'cluster' ? 'Grupo HDBSCAN' : 'Clasificación temática'} (kNN)</h4>
         <span class="cat-method">${knn.vertical ? `${knn.count}/${knn.total} videos` : ''}</span>
       </div>
       <div class="cat-primary">
         <i class="cat-dot"></i>
-        <span>${knn.vertical || 'Multicategoría'}</span>
+        <span>${(colorMode === 'cluster' && concept.cluster) || knn.vertical || 'Multicategoría'}</span>
       </div>
       ${knn.breakdown && knn.breakdown.length ? `
         <div class="knn-list">
@@ -1681,6 +1691,7 @@ function showExternalImageResult(data) {
   const ext = data.external_image || {};
 
   currentVideoData = data;
+  currentRenderer = showExternalImageResult;
   currentTargetPos = targetPos;
   currentRelTab = 'nearest';
   data._farthestList = data.farthest || [];
@@ -1699,7 +1710,7 @@ function showExternalImageResult(data) {
 
   const knn = computeKnnVotes(ext, data.neighbors || []);
   const zsTags = inferClientZeroShot(ext, data.neighbors || []);
-  const primaryVert = knn.vertical || 'Sin clasificar';
+  const primaryVert = (colorMode === 'cluster' && ext.cluster) || knn.vertical || 'Sin clasificar';
   const nearCount = (data.neighbors || []).length;
   const farCount = (data._farthestList || []).length;
 
@@ -1722,7 +1733,7 @@ function showExternalImageResult(data) {
 
     <section class="panel-card">
       <div class="cat-header">
-        <h4>2 · Clasificación visual (kNN)</h4>
+        <h4>2 · ${colorMode === 'cluster' ? 'Grupo HDBSCAN' : 'Clasificación visual'} (kNN)</h4>
         <span class="cat-method">${knn.vertical ? `kNN · ${knn.count}/${knn.total} vecinos` : ''}</span>
       </div>
       <div class="cat-primary">
@@ -1830,6 +1841,7 @@ function showRealProfileResult(data) {
   const prof = data.profile || {};
 
   currentVideoData = data;
+  currentRenderer = showRealProfileResult;
   currentTargetPos = targetPos;
   currentRelTab = 'nearest';
   data._farthestList = data.farthest || [];
@@ -1853,7 +1865,7 @@ function showRealProfileResult(data) {
   r.scale.set(1.4, 1.4, 1);
   overlay.add(r);
 
-  const knn = computeKnnVotes(prof, data.neighbors || []);
+  const knn = computeKnnVotes(prof, colorMode === 'cluster' ? (data.profile_videos || []) : (data.neighbors || []));
   const zsTags = inferClientZeroShot(prof, data.neighbors || []);
   const nVids = prof.analyzed_videos || (data.profile_videos || []).length || 1;
   const nearCount = (data.neighbors || []).length;
@@ -1875,7 +1887,7 @@ function showRealProfileResult(data) {
     <section class="panel-card">
       <div class="cat-header">
         <h4>2 · Distribución de tu burbuja</h4>
-        <span class="cat-method">${(knn.breakdown || []).length} de ${prof.total_categories || D.cats.length} categorías</span>
+        <span class="cat-method">${(knn.breakdown || []).length} de ${colorMode === 'cluster' ? `${D.cats.length} grupos` : `${prof.total_categories || D.cats.length} categorías`}</span>
       </div>
       ${knn.breakdown && knn.breakdown.length ? `
         <div class="knn-list">
