@@ -1,0 +1,6 @@
+proyeccion,trustworthiness,silhouette,knn_acc,NMI_kmeans
+PCA 3D,0.828,-0.133,0.643,0.325
+UMAP 3D,0.956,-0.099,0.771,0.378
+PCA 282 + UMAP 3D,0.958,-0.101,0.773,0.364
+Original (768 dims),,-0.003,0.798,0.351
+Baseline mayoría,,,0.347,

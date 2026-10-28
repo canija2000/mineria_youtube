@@ -1,8 +1,8 @@
-modelo,knn_acc_original,knn_acc_umap,NMI_kmeans_umap
-TF-IDF,0.609,0.56,0.134
-MiniLM,0.698,0.675,0.297
-Gemma · texto,0.798,0.771,0.378
-Gemma · imagen,0.784,0.769,0.391
-Gemma · imagen + texto,0.819,0.791,0.364
-Gemma · fusión tardía,0.838,0.823,0.452
-Baseline mayoría,0.347,,
+modelo,knn_acc_original,knn_acc_umap,NMI_kmeans_umap,trustworthiness
+TF-IDF,0.609,0.56,0.134,0.863
+MiniLM,0.698,0.675,0.297,0.888
+Gemma · texto,0.798,0.771,0.378,0.956
+Gemma · imagen,0.784,0.769,0.391,0.929
+Gemma · imagen + texto,0.819,0.791,0.364,0.958
+Gemma · fusión tardía,0.838,0.823,0.452,0.955
+Baseline mayoría,0.347,,,

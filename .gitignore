@@ -11,6 +11,7 @@ __pycache__/
 # datos: se ignora todo data/ (se regenera con recolect.py) salvo la tabla de métricas
 data/*
 !data/metricas.csv
+!data/metricas_proyecciones.csv
 
 # informe LaTeX: solo el .tex, el .pdf y las figuras; el resto son auxiliares de pdflatex/latexmk
 informe/*

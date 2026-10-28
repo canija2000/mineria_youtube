@@ -9,9 +9,11 @@ Las métricas son las mismas del informe:
   knn_acc_original   kNN (k=15, coseno) en el espacio original, validación cruzada 5-fold
   knn_acc_umap       kNN (k=15) sobre el UMAP 3D
   NMI_kmeans_umap    K-Means (k = n° de categorías) sobre el UMAP 3D contra la categoría real
+  trustworthiness    qué tan fieles son los vecinos del UMAP 3D a los del espacio original
 
 Uso:
-    python3 -m analysis.metricas    # escribe data/metricas.csv y data/proyecciones.parquet (~5 min)
+    python3 -m analysis.metricas    # escribe data/metricas.csv, data/metricas_proyecciones.csv
+                                    # y data/proyecciones.parquet (~7 min)
 """
 from collections import Counter
 from pathlib import Path
@@ -68,19 +70,67 @@ def matriz(df: pd.DataFrame, rep: str) -> np.ndarray:
     return np.stack(df[f"emb_{rep}"].to_numpy()).astype(np.float32)
 
 
+def muestra(n: int, tamaño: int = 5000) -> np.ndarray:
+    """Índices al azar (fijos) para las métricas que comparan todos los pares."""
+    return np.random.default_rng(42).choice(n, min(tamaño, n), replace=False)
+
+
 def evaluar(X: np.ndarray, U: np.ndarray, y: np.ndarray) -> dict:
-    """Las tres métricas para una representación X y su UMAP 3D U."""
+    """Las métricas para una representación X y su UMAP 3D U."""
     from sklearn.cluster import KMeans
+    from sklearn.manifold import trustworthiness
     from sklearn.metrics import normalized_mutual_info_score
     from sklearn.model_selection import cross_val_score
     from sklearn.neighbors import KNeighborsClassifier
 
     k = len(np.unique(y))
+    idx = muestra(len(X))
     return {
         "knn_acc_original": cross_val_score(KNeighborsClassifier(15, metric="cosine"), X, y, cv=5).mean(),
         "knn_acc_umap": cross_val_score(KNeighborsClassifier(15), U, y, cv=5).mean(),
         "NMI_kmeans_umap": normalized_mutual_info_score(y, KMeans(k, n_init=5, random_state=42).fit_predict(U)),
+        "trustworthiness": trustworthiness(X[idx], U[idx], n_neighbors=15, metric="cosine"),
     }
+
+
+def evaluar_proyecciones(X: np.ndarray, U: np.ndarray, y: np.ndarray) -> pd.DataFrame:
+    """Compara formas de llevar X a 3D: PCA, UMAP y PCA (90 % de la varianza) + UMAP.
+
+    Silhouette mide si las categorías quedan separadas; se calcula con coseno en el
+    espacio original y con distancia euclidiana en las proyecciones.
+    """
+    import umap
+    from sklearn.cluster import KMeans
+    from sklearn.decomposition import PCA
+    from sklearn.dummy import DummyClassifier
+    from sklearn.manifold import trustworthiness
+    from sklearn.metrics import normalized_mutual_info_score, silhouette_score
+    from sklearn.model_selection import cross_val_score
+    from sklearn.neighbors import KNeighborsClassifier
+
+    k = len(np.unique(y))
+    idx = muestra(len(X))
+    k90 = int(np.argmax(np.cumsum(PCA().fit(X).explained_variance_ratio_) >= 0.9)) + 1
+    espacios = {
+        "PCA 3D": PCA(n_components=3, random_state=42).fit_transform(X),
+        "UMAP 3D": U,
+        f"PCA {k90} + UMAP 3D": umap.UMAP(**UMAP_PARAMS).fit_transform(PCA(n_components=k90, random_state=42).fit_transform(X)),
+        "Original (768 dims)": X,
+    }
+    filas = []
+    for nombre, Z in espacios.items():
+        original = Z is X
+        metrica = "cosine" if original else "euclidean"
+        filas.append({
+            "proyeccion": nombre,
+            "trustworthiness": np.nan if original else trustworthiness(X[idx], Z[idx], n_neighbors=15, metric="cosine"),
+            "silhouette": silhouette_score(Z[idx], y[idx], metric=metrica),
+            "knn_acc": cross_val_score(KNeighborsClassifier(15, metric=metrica), Z, y, cv=5).mean(),
+            "NMI_kmeans": normalized_mutual_info_score(y, KMeans(k, n_init=5, random_state=42).fit_predict(Z)),
+        })
+    filas.append({"proyeccion": "Baseline mayoría",
+                  "knn_acc": cross_val_score(DummyClassifier(strategy="most_frequent"), np.zeros((len(y), 1)), y, cv=5).mean()})
+    return pd.DataFrame(filas).set_index("proyeccion").round(3)
 
 
 def zero_shot_topk(X: np.ndarray, L: np.ndarray, k: int = 10, lote: int = 4096) -> np.ndarray:
@@ -117,6 +167,8 @@ def main():
     for rep, nombre in REPRESENTACIONES.items():
         X = matriz(df, rep)
         U = umap.UMAP(**UMAP_PARAMS).fit_transform(X)
+        if rep == "text":
+            evaluar_proyecciones(X, U, y).to_csv(DATA / "metricas_proyecciones.csv")
         proyecciones[[f"{rep}_x", f"{rep}_y", f"{rep}_z"]] = U
         filas.append({"modelo": nombre, **evaluar(X, U, y)})
         print(f"✓ {nombre}")
@@ -128,7 +180,7 @@ def main():
     metricas = pd.DataFrame(filas).set_index("modelo").round(3)
     metricas.to_csv(DATA / "metricas.csv")
     proyecciones.to_parquet(DATA / "proyecciones.parquet", index=False)
-    print(f"\n{metricas.to_string()}\n-> data/metricas.csv, data/proyecciones.parquet")
+    print(f"\n{metricas.to_string()}\n-> data/metricas.csv, data/metricas_proyecciones.csv, data/proyecciones.parquet")
 
 
 if __name__ == "__main__":

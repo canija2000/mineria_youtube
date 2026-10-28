@@ -54,24 +54,30 @@ def plot3d(data: pd.DataFrame, rep: str, titulo: str, color="vertical", leyenda=
     return fig
 
 
-def lollipop(metricas: pd.DataFrame, paneles: list[tuple[str, str]], modelos: list[str]):
+def lollipop(metricas: pd.DataFrame, paneles: list[tuple[str, str]], modelos: list[str], colores=None):
     """Un panel por métrica; una línea con punta por modelo (más largo = mejor)."""
+    colores = colores or COLORES
     fig, axes = plt.subplots(1, len(paneles), figsize=(6 * len(paneles), 0.75 * len(modelos) + 1.8), sharey=True)
     for ax, (col, titulo) in zip(np.atleast_1d(axes), paneles):
-        m = metricas.loc[[n for n in modelos if n in metricas.index], col].dropna()
-        ypos = np.arange(len(m))[::-1]
-        colores = [COLORES.get(n, INK) for n in m.index]
-        ax.hlines(ypos, 0, m.values, color=colores, lw=3, zorder=3)
-        ax.scatter(m.values, ypos, color=colores, s=90, zorder=4)
+        # todas las filas en la misma posición en cada panel; los NaN quedan vacíos
+        todos = metricas.loc[[n for n in modelos if n in metricas.index], col]
+        ypos = np.arange(len(todos))[::-1][todos.notna().to_numpy()]
+        m = todos.dropna()
+        c = [colores.get(n, INK) for n in m.index]
+        lo, hi = min(0, m.min()), max(0, m.max())
+        ancho = hi - lo
+        ax.axvline(0, color=GRID, lw=1, zorder=1)
+        ax.hlines(ypos, 0, m.values, color=c, lw=3, zorder=3)
+        ax.scatter(m.values, ypos, color=c, s=90, zorder=4)
         for yy, v in zip(ypos, m.values):
-            ax.text(v + m.max() * 0.03, yy, f"{v:.3f}", va="center", fontsize=11, color=INK)
-        if col == "knn_acc_original" and "Baseline mayoría" in metricas.index:
+            ax.text(max(v, 0) + ancho * 0.03, yy, f"{v:.3f}", va="center", fontsize=11, color=INK)
+        if "Baseline mayoría" in metricas.index and pd.notna(metricas.loc["Baseline mayoría", col]):
             b = metricas.loc["Baseline mayoría", col]
             ax.axvline(b, color=INK, ls="--", lw=1.2)
             ax.text(b, -0.75, f" mayoría {b:.3f}", fontsize=9.5, color=MUTED, va="center")
-        ax.set_ylim(-1, len(m) - 0.5)
-        ax.set_xlim(0, m.max() * 1.22)
-        ax.set_yticks(ypos, m.index, fontsize=11, color=INK)
+        ax.set_ylim(-1, len(todos) - 0.5)
+        ax.set_xlim(lo - ancho * 0.08 if lo < 0 else 0, hi + ancho * 0.22)
+        ax.set_yticks(np.arange(len(todos))[::-1], todos.index, fontsize=11, color=INK)
         ax.set_title(titulo, loc="left", fontsize=13, fontweight="bold", color=INK)
         ax.grid(axis="x", color=GRID, zorder=0)
         ax.grid(axis="y", visible=False)
