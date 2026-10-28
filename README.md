@@ -1,4 +1,34 @@
-# Recolección y embeddings de videos de YouTube
+# Mapa de YouTube
+
+Un mapa 3D explorable de ~35 mil videos de YouTube-8M, donde videos parecidos quedan cerca. Cada video se representa con EmbeddingGemma 2 a partir de su texto (título, tags, descripción) y de su miniatura, y la web permite ubicar en el mapa un video, un concepto, una imagen o un canal.
+
+## Estructura del repo
+
+```
+recolect.py            # pipeline completo: YT-8M -> API de YouTube -> miniaturas -> embeddings -> mapas
+remap.py               # recalcula el mapa 3D (texto o miniaturas) sin rehacer embeddings
+recolect/              # módulos del pipeline (descarga, hidratación, embeddings, mapas, SQLite)
+server/                # API FastAPI que sirve el mapa y ubica videos nuevos (+ la web en /)
+web/index.html         # la web: visor Three.js conectado a la API
+analysis/              # métricas y gráficos compartidos por los notebooks
+notebooks/             # exploración guiada, en orden:
+  01_datos                 qué videos hay y de dónde salen
+  02_texto_vs_baselines    EmbeddingGemma frente a TF-IDF y MiniLM
+  03_multimodal            texto, imagen, imagen + texto y fusión tardía
+  04_zero_shot             etiquetar miniaturas con el vocabulario de YT-8M
+  05_clustering_hdbscan    grupos del mapa y su bautizo zero-shot
+informe/               # informe en LaTeX (main.tex) y sus figuras
+docs/estado.md         # estado actual del proyecto y próximos pasos
+data/                  # todo lo generado (no se versiona, salvo data/metricas.csv)
+```
+
+## Por dónde empezar
+
+1. Prepara el entorno (sección siguiente) y corre `python3 recolect.py`, o pide a alguien del grupo una copia de `data/`.
+2. Lee los notebooks en orden: solo leen lo que dejó el pipeline, no recalculan nada pesado.
+3. Levanta el servidor (`uvicorn server.app:app --port 8000`) y abre `http://127.0.0.1:8000`.
+
+## Recolección
 
 La preparación de datos completa se ejecuta con un solo comando:
 
@@ -50,6 +80,24 @@ Para solo completar las miniaturas que faltan, sin calcular vectores ni reescrib
 python3 recolect.py --solo-thumbnails
 ```
 
+Para sumar videos actuales (populares por país y de canales semilla) al catálogo de la web, sin tocar la muestra de YT-8M:
+
+```bash
+python3 recolect.py --modern --regions CL,AR,MX,ES,US
+```
+
+Los embeddings de miniaturas corren sin barra de progreso. Mientras `recolect.py` está en esa etapa, el avance se consulta desde otra terminal:
+
+```bash
+python3 -m recolect.avance
+```
+
+## Métricas y notebooks
+
+`python3 -m analysis.metricas` evalúa las seis representaciones sobre los mismos videos (kNN en el espacio original y en UMAP 3D, NMI de K-Means contra la categoría) y escribe `data/metricas.csv` y `data/proyecciones.parquet`, que leen los notebooks 02 y 03. Tarda ~5 minutos; solo hace falta volver a correrlo si cambian los embeddings.
+
+Los notebooks guardan sus figuras en `informe/figs/` solo si se cambia `GUARDAR_FIGS = True` en su primera celda.
+
 ## Mapa 3D guardado y recálculo
 
 El mapa (posiciones 3D y el "molde" UMAP para ubicar videos nuevos) se calcula **fuera del servidor** y se guarda por versiones:
@@ -57,15 +105,17 @@ El mapa (posiciones 3D y el "molde" UMAP para ubicar videos nuevos) se calcula *
 ```
 data/maps/current.json        # cuál versión está vigente
 data/maps/<versión>/coords.parquet, reducer.joblib, meta.json
+data/maps_image/...           # lo mismo para el espacio de miniaturas
 ```
 
-- `recolect.py` lo calcula en la etapa 11 si no existe o si cambiaron los vectores de texto.
+- `recolect.py` lo calcula en la etapa 11 si no existe o si cambiaron los vectores de texto (y el de miniaturas si cambió `emb_image.parquet`).
 - Cada video que llega al servidor se guarda en `data/webapp_catalog.sqlite3` (metadatos + vector) y se ubica sobre el mapa vigente sin modificarlo.
 - `remap.py` recalcula el mapa con los videos base **más los recibidos**, publica una versión nueva y conserva las 3 últimas (`--keep`). El servidor detecta la versión nueva en el siguiente pedido y la carga sin reiniciarse.
 
 ```bash
 python3 remap.py                  # recalcula ahora
 python3 remap.py --min-new 50     # solo si llegaron al menos 50 videos nuevos desde el último mapa
+python3 remap.py --rep image      # mapa de miniaturas (solo videos base: SQLite no guarda vectores de imagen)
 python3 remap.py --data data/dev  # sobre los datos de prueba
 ```
 
@@ -75,19 +125,22 @@ Para dejarlo como rutina, por ejemplo cada noche a las 3:00 con `crontab -e`:
 0 3 * * * cd /ruta/a/mineria_youtube && .venv/bin/python remap.py --min-new 50 >> data/remap.log 2>&1
 ```
 
-## API para la webapp
+## API y web
 
-El backend inicial está en `server/app.py`. Recibe un ID o URL de YouTube, consulta metadatos, genera el embedding de texto, busca vecinos y ubica el nuevo punto sobre el mapa guardado.
+El backend está en `server/app.py` y sirve también la web (`web/index.html`) en la raíz. Recibe un ID o URL de YouTube, consulta metadatos, genera el embedding, busca vecinos y ubica el nuevo punto sobre el mapa guardado.
 
 ```bash
 uvicorn server.app:app --host 127.0.0.1 --port 8000
 MAPA_DATA=data/dev uvicorn server.app:app --port 8000   # con los datos del modo prueba
 ```
 
-La API usa `emb_text.parquet`, `yt8m_hydrated.parquet` y el mapa vigente de `maps/` como catálogo base.
+La API usa `emb_text.parquet`, `emb_image.parquet`, `emb_vocab.parquet`, `yt8m_hydrated.parquet` y los mapas vigentes de `maps/` y `maps_image/` como catálogo base.
 
-- `GET /map` entrega todos los puntos del mapa vigente (videos base + recibidos) en columnas: `youtube_id`, `x`, `y`, `z`, `title`, `channel_title`, `vertical` (índice en la lista `verticals`, -1 si no tiene), `source` (índice en `sources`: `yt8m` o `recibido`) e `in_map` (si el video ya formaba parte del cálculo del mapa o solo se ubicó sobre él). La respuesta va comprimida (gzip).
-- `POST /videos` agrega o recupera un video y devuelve su posición y sus 12 vecinos.
+- `GET /map?rep=text|image` entrega todos los puntos del mapa vigente (videos base + recibidos) en columnas: `youtube_id`, `x`, `y`, `z`, `title`, `channel_title`, `vertical` (índice en la lista `verticals`, -1 si no tiene), `source` (índice en `sources`: `yt8m` o `recibido`) e `in_map` (si el video ya formaba parte del cálculo del mapa o solo se ubicó sobre él). La respuesta va comprimida (gzip).
+- `POST /videos` agrega o recupera un video y devuelve su posición, sus 12 vecinos, los 12 más lejanos y etiquetas zero-shot. Con `representation: "image"` lo ubica por su miniatura.
+- `POST /concepts` ubica una palabra o frase libre y devuelve la región del mapa más afín.
+- `POST /images` ubica una imagen cualquiera (URL o archivo arrastrado) en el espacio de miniaturas, sin guardarla.
+- `POST /profiles` toma un `@handle`, canal o playlist, embebe sus últimos videos y mide qué tan concentrados están en el mapa.
 - `GET /health` indica la versión del mapa y cuántos videos recibidos aún no están incluidos en él.
 
-Los videos recibidos se guardan en `webapp_catalog.sqlite3`.
+Los videos recibidos por `/videos` se guardan en `webapp_catalog.sqlite3`.
