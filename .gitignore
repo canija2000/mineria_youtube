@@ -15,6 +15,7 @@ data/*
 !data/metricas_text.png
 !data/metricas_modelos.csv
 !data/metricas_multimodal.csv
+!data/metricas.csv
 context.md
 
 # informe LaTeX: solo el .tex, el .pdf y las figuras; el resto son auxiliares de pdflatex/latexmk
