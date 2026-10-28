@@ -1,8 +1,0 @@
-modelo,knn_acc_original,knn_acc_umap,NMI_kmeans_umap
-TF-IDF,0.564,0.509,0.138
-MiniLM,0.635,0.622,0.286
-Texto (Gemma2),0.755,0.726,0.376
-Imagen (Gemma2),0.742,0.732,0.392
-Img+texto (Gemma2),0.77,0.736,0.362
-Fusión texto+imagen,0.792,0.784,0.462
-baseline mayoría,0.346,,

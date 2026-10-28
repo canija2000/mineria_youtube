@@ -1,72 +1,149 @@
-## YouTube-8M + YouTube Data API v3
+# Mapa de YouTube
 
-La idea: meter videos de YouTube en un espacio vectorial, ver cómo se agrupan por tema y (más adelante, ójala, usarlo para encontrar videos **fuera de tus recomendaciones**.)
+Un mapa 3D explorable de ~35 mil videos de YouTube-8M, donde videos parecidos quedan cerca. Cada video se representa con EmbeddingGemma 2 a partir de su texto (título, tags, descripción) y de su miniatura, y la web permite ubicar en el mapa un video, un concepto, una imagen o un canal.
 
-Usamos dos fuentes:
+## Estructura del repo
 
-1.  [**YouTube-8M**](https://research.google.com/youtube8m/) (Google, v2 2018): \~6,1M videos con features visuales/audio ya calculadas (`mean_rgb`, `mean_audio`) y etiquetas temáticas. Los IDs vienen anonimizados.
-2.  [**YouTube Data API v3**](https://developers.google.com/youtube/v3): título, descripción, tags, vistas, miniatura, etc.
-
-Del train de YT-8M bajamos un sample de **\~1%** (41 shards, 41.393 videos). Cada video trae un `pid` anonimizado, que traducimos al ID real de YouTube para pedir su metadata a la API. Con el texto (título + tags + descripción) generamos embeddings con [EmbeddingGemma 2](https://huggingface.co/google/embeddinggemma-2) y los proyectamos en 3D.
-
-```mermaid
-flowchart TD
-    A["YouTube-8M<br/>sample 1% (41k videos)"] -->|extract.py| B[("yt8m_sample.parquet<br/>pid · labels · mean_rgb · mean_audio")]
-    B -->|"hydrate.py<br/>pid → youtube_id"| C["YouTube Data API v3"]
-    C --> D[("yt8m_hydrated.parquet<br/>título · tags · descripción · stats")]
-    D -->|"embed.py<br/>EmbeddingGemma 2"| E[("emb_text.parquet<br/>768 dims")]
-    E -->|review.ipynb| F["PCA · UMAP 3D"]
-    B -.->|"labels → categoría"| F
-    F --> G[("projections.parquet")]
-    G -->|preview.ipynb| H["Visualización 3D<br/>+ métricas"]
+```
+recolect.py            # pipeline completo: YT-8M -> API de YouTube -> miniaturas -> embeddings -> mapas
+remap.py               # recalcula el mapa 3D (texto o miniaturas) sin rehacer embeddings
+recolect/              # módulos del pipeline (descarga, hidratación, embeddings, mapas, SQLite)
+server/                # API FastAPI que sirve el mapa y ubica videos nuevos (+ la web en /)
+web/index.html         # la web: visor Three.js conectado a la API
+analysis/              # métricas y gráficos compartidos por los notebooks
+notebooks/             # exploración guiada, en orden:
+  01_datos                 qué videos hay y de dónde salen
+  02_texto_vs_baselines    EmbeddingGemma frente a TF-IDF y MiniLM
+  03_multimodal            texto, imagen, imagen + texto y fusión tardía
+  04_zero_shot             etiquetar miniaturas con el vocabulario de YT-8M
+  05_clustering_hdbscan    grupos del mapa y su bautizo zero-shot
+informe/               # informe en LaTeX (main.tex) y sus figuras
+docs/estado.md         # estado actual del proyecto y próximos pasos
+data/                  # todo lo generado (no se versiona, salvo data/metricas.csv)
 ```
 
-### Los archivos
+## Por dónde empezar
 
-- `extract.py`: lee los `.tfrecord` de YT-8M y los pasa a `data/yt8m_sample.parquet`.
-- `hydrate.py`: traduce `pid` → `youtube_id` y pide la metadata a la API → `data/yt8m_hydrated.parquet`.
-- `embed.py`: arma el texto de cada video y lo embebe con EmbeddingGemma 2 → `data/emb_text.parquet`.
-- `review.ipynb`: el paso a paso: exploración, PCA, UMAP, métricas → `data/projections.parquet`.
-- `preview.ipynb`: para ver los resultados directo, sin recalcular nada.
+1. Prepara el entorno (sección siguiente) y corre `python3 recolect.py`, o pide a alguien del grupo una copia de `data/`.
+2. Lee los notebooks en orden: solo leen lo que dejó el pipeline, no recalculan nada pesado.
+3. Levanta el servidor (`uvicorn server.app:app --port 8000`) y abre `http://127.0.0.1:8000`.
 
-### El embudo de datos
+## Recolección
 
-| Etapa                    | Videos             |
-| ------------------------ | ------------------ |
-| Sample YT-8M             | 41.393             |
-| Con ID real de YouTube   | 37.230 (89,9%)     |
-| Todavía vivos en YouTube | **34.788 (84,0%)** |
-
-### Cómo correrlo
+La preparación de datos completa se ejecuta con un solo comando:
 
 ```bash
-# 1. entorno
-uv venv --python 3.12 .venv && uv pip install -p .venv -r requirements.txt
-
-# 2. API key de YouTube (Google Cloud → habilitar "YouTube Data API v3" → crear API key)
-echo 'YOUTUBE_API_KEY=tu_key' > .env
-
-# 3. bajar el sample (1/100 del train)
-mkdir -p data/yt8m/video/train && cd data/yt8m/video/train
-curl data.yt8m.org/download.py | shard=1,100 partition=2/video/train mirror=us python3
-cd -
-
-# 4. pipeline
-.venv/bin/python extract.py
-.venv/bin/python hydrate.py     # ~10 min, ~750 unidades de cuota
-.venv/bin/python embed.py       # ~30 min en un M2
+python3 recolect.py
 ```
 
-### implementado
+El script orquesta la descarga de YouTube-8M, extrae los pids, los traduce a IDs de YouTube, consulta metadatos, descarga miniaturas, recupera el vocabulario de YT-8M y calcula los espacios vectoriales. Es reanudable: reutiliza artefactos existentes y conserva las cachés de la API.
 
-1.  Se agregan modelos _base-lines_ para comparar con EmbeddingGemma 2, y se guardan sus métricas en `data/metricas_modelos.csv` (trustworthiness, kNN acc).
-    - Base Line 1 : `TF-IDF` : corresponde a un embedding clásico de texto que representa la frecuencia de las palabras en el corpus. Se hace un SVD para reducir la dimensionalidad a 768 dimensiones, para que sea comparable con EmbeddingGemma 2.
-    - Base Line 2 : `BERT` : corresponde a un embedding de texto basado [MiniLM](https://huggingface.co/sentence-transformers/all-MiniLM-L12-v2) que genera representaciones vectoriales de los textos. Es más avanzado que el anterior, pero, en teoría, menos que Gemma2. También se utiliza como marco comparativo. La gran diferencia con Gemma2, es que el espacio es de 384 dimensiones en lugar de 768.
-2.  Se observan diferencias en las métricas de los modelos.
-3.  - En `preview_images.ipynb` se trabajan con los resultados consolidados del proceso de `multimodal.py` .
-    - `multimodal.py` hace lo siguiente \[muestra de 5000 videos\]:
-      1.  embedding de la imagen $\rightarrow$ `emb_image.parquet`
-      2.  concatenación de `text` + `image` como input a un solo vector $\rightarrow$ `emb_imgtext.parquet`
-      3.  embedding de $3806$ etiquitas de YT-8M $\rightarrow$ `emb_vocab.parquet`
-      4.  zero-shot \[top-10 etiquetas x imagene\] $\rightarrow$ `zeroshot_image.parquet` Las imagenes se obtienen a partir del `youtube_id` \[obtenidos en el proceso anterior\] , a partir de este se solicita el thumbnail del video `https://i.ytimg.com/vi/{youtube_id}/mqdefault.jpg` .
-    - Sobre el _zero-shot_ : dado que el embedding de la imagen y el embedding de las etiquetas están en el mismo espacio vectorial, se puede calcular la similitud entre ellos \[multiplicando las matrices\] y obtener las etiquetas más cercanas a cada imagen. Esto permite etiquetar imágenes sin necesidad de un modelo entrenado específicamente para ello.
+## Preparación
+
+```bash
+uv venv --python 3.12 .venv
+uv pip install -p .venv -r requirements.txt
+echo 'YOUTUBE_API_KEY=tu_key' > .env
+```
+
+Activa el entorno antes de ejecutar el script. La llave de API se requiere para resolver los metadatos. El proyecto necesita espacio en disco para los shards YT-8M, miniaturas y archivos Parquet.
+
+## Etapas y productos
+
+1. Descarga por defecto el sample 1/100 de los shards `video/train` de YT-8M.
+2. Extrae pids, etiquetas y features de YT-8M a `data/yt8m_sample.parquet`.
+3. Resuelve `pid -> youtube_id` y lo guarda en `data/id_map.parquet`.
+4. Consulta YouTube Data API v3 y guarda metadatos en `data/yt8m_hydrated.parquet`; `data/api_raw.jsonl` permite reanudar.
+5. Descarga miniaturas a `data/thumbs/`.
+6. Descarga el vocabulario a `data/yt8m_vocabulary.csv` y genera sus embeddings en `data/emb_vocab.parquet`.
+7. Calcula embeddings de texto con EmbeddingGemma 2 y dos baselines comparables: TF-IDF+SVD y MiniLM.
+8. Calcula embeddings de miniatura con EmbeddingGemma 2.
+9. Calcula embeddings multimodales con imagen y texto en una sola entrada de EmbeddingGemma 2.
+10. Calcula fusión tardía normalizando la suma del embedding de texto y el embedding de imagen.
+11. Calcula y guarda el mapa 3D (UMAP) que usa el servidor (ver más abajo).
+
+Los vectores por representación se guardan en `data/emb_text.parquet`, `data/emb_tfidf.parquet`, `data/emb_minilm.parquet`, `data/emb_image.parquet`, `data/emb_imgtext.parquet` y `data/emb_fusion.parquet`. La tabla `data/embeddings_consolidated.parquet` reúne metadatos, etiquetas y seis columnas de vectores, alineadas por pid; es la entrada para el análisis de métricas posterior. El manifiesto de salida es `data/recolect_manifest.json`.
+
+Para una corrida reducida durante desarrollo (modo prueba):
+
+```bash
+python3 recolect.py --limit 200
+```
+
+El modo prueba escribe sus resultados en `data/dev/` y **nunca modifica `data/`**. Solo comparte con la corrida real las cachés que no dependen de cuántos videos se procesen: shards de YT-8M, `yt8m_sample.parquet`, `id_map.parquet`, `api_raw.jsonl`, miniaturas y vocabulario.
+
+`--force` vuelve a calcular los embeddings existentes. La descarga de shards y las cachés de hidratación se mantienen. La extracción de frames y la búsqueda semántica frame por frame no forman parte de este pipeline.
+
+Para solo completar las miniaturas que faltan, sin calcular vectores ni reescribir ningún archivo:
+
+```bash
+python3 recolect.py --solo-thumbnails
+```
+
+Para sumar videos actuales (populares por país y de canales semilla) al catálogo de la web, sin tocar la muestra de YT-8M:
+
+```bash
+python3 recolect.py --modern --regions CL,AR,MX,ES,US
+```
+
+Los embeddings de miniaturas corren sin barra de progreso. Mientras `recolect.py` está en esa etapa, el avance se consulta desde otra terminal:
+
+```bash
+python3 -m recolect.avance
+```
+
+## Métricas y notebooks
+
+`python3 -m analysis.metricas` evalúa las seis representaciones sobre los mismos videos (kNN en el espacio original y en UMAP 3D, NMI de K-Means contra la categoría) y escribe `data/metricas.csv` y `data/proyecciones.parquet`, que leen los notebooks 02 y 03. Tarda ~5 minutos; solo hace falta volver a correrlo si cambian los embeddings.
+
+Los notebooks guardan sus figuras en `informe/figs/` solo si se cambia `GUARDAR_FIGS = True` en su primera celda.
+
+## Mapa 3D guardado y recálculo
+
+El mapa (posiciones 3D y el "molde" UMAP para ubicar videos nuevos) se calcula **fuera del servidor** y se guarda por versiones:
+
+```
+data/maps/current.json        # cuál versión está vigente
+data/maps/<versión>/coords.parquet, reducer.joblib, meta.json
+data/maps/<versión>/clusters.parquet, clusters.json, centroids.npy   # grupos HDBSCAN con nombre zero-shot
+data/maps_image/...           # lo mismo para el espacio de miniaturas
+```
+
+Junto a cada mapa se guardan sus grupos HDBSCAN (`recolect/clusters.py`, el mismo procedimiento del notebook 05). La web los usa para colorear el mapa por grupo en vez de por categoría de YouTube. Para agregarlos a un mapa ya calculado sin rehacer el UMAP: `python3 -m recolect.clusters --rep text` (o `--rep image`).
+
+- `recolect.py` lo calcula en la etapa 11 si no existe o si cambiaron los vectores de texto (y el de miniaturas si cambió `emb_image.parquet`).
+- Cada video que llega al servidor se guarda en `data/webapp_catalog.sqlite3` (metadatos + vector) y se ubica sobre el mapa vigente sin modificarlo.
+- `remap.py` recalcula el mapa con los videos base **más los recibidos**, publica una versión nueva y conserva las 3 últimas (`--keep`). El servidor detecta la versión nueva en el siguiente pedido y la carga sin reiniciarse.
+
+```bash
+python3 remap.py                  # recalcula ahora
+python3 remap.py --min-new 50     # solo si llegaron al menos 50 videos nuevos desde el último mapa
+python3 remap.py --rep image      # mapa de miniaturas (solo videos base: SQLite no guarda vectores de imagen)
+python3 remap.py --data data/dev  # sobre los datos de prueba
+```
+
+Para dejarlo como rutina, por ejemplo cada noche a las 3:00 con `crontab -e`:
+
+```
+0 3 * * * cd /ruta/a/mineria_youtube && .venv/bin/python remap.py --min-new 50 >> data/remap.log 2>&1
+```
+
+## API y web
+
+El backend está en `server/app.py` y sirve también la web (`web/index.html`) en la raíz. Recibe un ID o URL de YouTube, consulta metadatos, genera el embedding, busca vecinos y ubica el nuevo punto sobre el mapa guardado.
+
+```bash
+uvicorn server.app:app --host 127.0.0.1 --port 8000
+MAPA_DATA=data/dev uvicorn server.app:app --port 8000   # con los datos del modo prueba
+```
+
+La API usa `emb_text.parquet`, `emb_image.parquet`, `emb_vocab.parquet`, `yt8m_hydrated.parquet` y los mapas vigentes de `maps/` y `maps_image/` como catálogo base.
+
+- `GET /map?rep=text|image` entrega, además de las categorías, el grupo HDBSCAN de cada punto (`cluster`, índice en la lista `clusters`). Entrega todos los puntos del mapa vigente (videos base + recibidos) en columnas: `youtube_id`, `x`, `y`, `z`, `title`, `channel_title`, `vertical` (índice en la lista `verticals`, -1 si no tiene), `source` (índice en `sources`: `yt8m` o `recibido`) e `in_map` (si el video ya formaba parte del cálculo del mapa o solo se ubicó sobre él). La respuesta va comprimida (gzip).
+- `POST /videos` agrega o recupera un video y devuelve su posición, sus 12 vecinos, los 12 más lejanos y etiquetas zero-shot. Con `representation: "image"` lo ubica por su miniatura.
+- `POST /concepts` ubica una palabra o frase libre y devuelve la región del mapa más afín.
+- `POST /images` ubica una imagen cualquiera (URL o archivo arrastrado) en el espacio de miniaturas, sin guardarla.
+- `POST /profiles` toma un `@handle`, canal o playlist, embebe sus últimos videos y mide qué tan concentrados están en el mapa.
+- `GET /health` indica la versión del mapa y cuántos videos recibidos aún no están incluidos en él.
+
+Los videos recibidos por `/videos` se guardan en `webapp_catalog.sqlite3`.

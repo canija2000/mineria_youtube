@@ -42,7 +42,7 @@
 
 \title{\textbf{Mapeando YouTube fuera de la burbuja}\\[4pt]
   \large Embeddings multimodales de videos con EmbeddingGemma~2}
-\author{\todo{Integrantes} \\ IIC2433 Minería de Datos — 2026-2}
+\author{Joaquín Bächler - Matías Morales - Franco Moya - Cristóbal Vargas \\ IIC2433 Minería de Datos — 2026-2}
 \date{\today}
 
 \begin{document}
@@ -50,22 +50,20 @@
 
 \begin{abstract}
 \todo{Escribir al final (5--6 líneas): problema, datos, método, resultado principal.}
-Representamos 34.788 videos de YouTube en un espacio vectorial común usando EmbeddingGemma~2,
+Representamos $\approx 36.000$ videos de YouTube en un espacio vectorial común usando \texttt{EmbeddingGemma~2},
 a partir de su texto (título, tags y descripción) y de su miniatura. Sobre el texto, el modelo
-supera a dos baselines (TF-IDF y MiniLM) en todas las métricas. En una muestra de 5.000 videos,
-la miniatura por sí sola es casi tan informativa como el texto, y su fusión tardía mejora la
-recuperación de la categoría temática (kNN de 0,755 a 0,792). Además, como imagen y texto
+supera a dos baselines (TF-IDF y MiniLM) en todas las métricas. Sobre los videos, la imagen (thumbnail) por sí sola es casi tan informativa como el texto, y su fusión tardía mejora la
+recuperación de la categoría temática (kNN de 0,798 a 0,838). Además, como imagen y texto
 comparten el espacio, la miniatura permite etiquetar videos sin entrenamiento (zero-shot):
 en el 60\,\% de los casos, alguna de las 5 etiquetas predichas es una etiqueta real.
 \end{abstract}
 
 % =====================================================================
 \section{Introducción}
-\todo{Motivación: las plataformas recomiendan contenido cercano a lo que ya consumimos
-(burbujas de filtro). Pregunta: ¿podemos construir un mapa del contenido de YouTube que
-permita, más adelante, recomendar videos \emph{fuera} de esa zona? Contribuciones:
+Las plataformas, como \texttt{YouTube} recomiendan contenido cercano a lo que ya consumimos, llamemos a esto \textit{burbujas de filtro}. Nos interesaría saber si ¿podemos construir un mapa del contenido de YouTube que
+permita recomendar videos \emph{fuera} de esa zona? Contribuciones:
 (1) pipeline de datos YT-8M + API, (2) comparación de representaciones de texto,
-imagen y multimodales, (3) etiquetado zero-shot desde la miniatura.}
+imagen y multimodales, (3) etiquetado zero-shot desde la miniatura.
 
 % =====================================================================
 \section{Datos}
@@ -74,6 +72,8 @@ imagen y multimodales, (3) etiquetado zero-shot desde la miniatura.}
 Usamos la versión~2 (2018) de YouTube-8M~\cite{yt8m}, con $\sim$6,1 millones de videos.
 Del split de entrenamiento descargamos una muestra aleatoria de $\sim$1\,\%: 41 archivos
 (\emph{shards}), seleccionados de forma determinística por el hash MD5 de su nombre.
+
+De ahora en adelante, se propone modelar matemáticamente este proceso, con el objetivo de darle algún sustento, orden y referencia. 
 
 Sea $\mathcal{I} = \{1, \dots, N\}$ el conjunto de videos de la muestra, con $N = 41.393$.
 Construimos la tabla $Y$, cuya fila $i$ es
@@ -94,7 +94,7 @@ A cada video le asignamos una \emph{categoría gruesa}
   c_i = \moda\{\, \mathrm{Vertical1}(j) : j \in \ell_i \,\},
 \]
 con 25 valores posibles. Esta categoría es la referencia para evaluar las representaciones.
-\todo{Mencionar el desbalance: Arts \& Entertainment y Games concentran la mayoría.}
+Luego nos encontraremos (y trataremos de resolver) un problema de proporcionalidad dentro de estas categorías (hay 2 que están sobre representadas en el dataset y/o abarcan-generalizan contenido).
 
 \subsection{Metadatos desde la YouTube Data API}
 Los \texttt{pid} no son identificadores de YouTube. Existe una función \emph{parcial}
@@ -162,11 +162,14 @@ concatenación de strings,
 El texto se trunca a 256 tokens, lo que afecta al 2,9\,\% de los videos.
 
 \paragraph{Imagen.}
-Sea $s_i \in \{0, \dots, 255\}^{180 \times 320 \times 3}$ la miniatura del video. Sobre una
-submuestra aleatoria $\mathcal{I}_S \subset \mathcal{I}_W$ con $|\mathcal{I}_S| = 5.000$,
+Sea $s_i \in \{0, \dots, 255\}^{180 \times 320 \times 3}$ la miniatura del video. Sobre
+$\mathcal{I}_S \subset \mathcal{I}_W$, los videos cuya miniatura se pudo descargar
+($|\mathcal{I}_S| = 34.771$),
 \[
-  x_i^{I} = f_\theta(s_i), \qquad X^{I} \in \R^{5000 \times 768}.
+  x_i^{I} = f_\theta(s_i), \qquad X^{I} \in \R^{34771 \times 768}.
 \]
+Todas las comparaciones de la Sección~\ref{sec:resultados} se hacen sobre $\mathcal{I}_S$, para
+que cada representación se mida sobre exactamente los mismos videos.
 Usamos 70 tokens visuales por imagen (el valor por defecto es 280), lo que es 5 veces más
 rápido y cambia poco el vector (similitud 0,986 con la versión de 280 tokens).
 
@@ -193,7 +196,7 @@ Sea $L \in \R^{3806 \times 768}$ la matriz cuya fila $j$ es $f_\theta(\mathrm{no
 embedding del nombre de la etiqueta $j$ como texto. Como $X^{I}$ y $L$ viven en el mismo
 espacio,
 \[
-  S = X^{I} L^{\top} \in \R^{5000 \times 3806}, \qquad
+  S = X^{I} L^{\top} \in \R^{34771 \times 3806}, \qquad
   S_{ij} = \simil(\text{imagen}_i,\ \text{etiqueta}_j).
 \]
 La predicción para la imagen $i$ son las $k$ etiquetas de mayor similitud, y medimos si
@@ -221,21 +224,22 @@ frecuente).
 
 % =====================================================================
 \section{Resultados}
+\label{sec:resultados}
 
 \subsection{Texto: EmbeddingGemma 2 frente a los baselines}
 
 \begin{table}[H]
   \centering
-  \caption{Representaciones de texto sobre los 34.788 videos.}
+  \caption{Representaciones de texto sobre los 34.771 videos de $\mathcal{I}_S$.}
   \label{tab:texto}
   \small
   \begin{tabular}{lrrrrr}
     \toprule
     Modelo & Dims & kNN original & kNN UMAP & NMI (UMAP) & Trustworthiness \\
     \midrule
-    TF-IDF + SVD     & 768 & 0,605 & 0,558 & 0,132 & 0,870 \\
-    MiniLM           & 384 & 0,693 & 0,669 & 0,294 & 0,887 \\
-    EmbeddingGemma 2 & 768 & \textbf{0,793} & \textbf{0,764} & \textbf{0,360} & \textbf{0,957} \\
+    TF-IDF + SVD     & 768 & 0,609 & 0,560 & 0,134 & 0,863 \\
+    MiniLM           & 384 & 0,698 & 0,675 & 0,297 & 0,888 \\
+    EmbeddingGemma 2 & 768 & \textbf{0,798} & \textbf{0,771} & \textbf{0,378} & \textbf{0,956} \\
     \bottomrule
   \end{tabular}
 \end{table}
@@ -253,11 +257,11 @@ y +10 sobre MiniLM; NMI casi triplica a TF-IDF.}
     \toprule
     Proyección & Trustworthiness & Silhouette & kNN & NMI \\
     \midrule
-    PCA 3D              & 0,830 & $-0{,}160$ & 0,638 & 0,323 \\
-    UMAP 3D             & 0,957 & $-0{,}163$ & 0,764 & 0,360 \\
-    PCA 282 + UMAP 3D   & \textbf{0,958} & $-0{,}174$ & 0,771 & \textbf{0,367} \\
-    Original (768 dims) & --    & $0{,}008$  & \textbf{0,793} & 0,351 \\
-    Mayoría             & --    & --         & 0,346 & -- \\
+    PCA 3D              & 0,828 & $-0{,}133$ & 0,643 & 0,325 \\
+    UMAP 3D             & 0,956 & $-0{,}099$ & 0,771 & \textbf{0,378} \\
+    PCA 282 + UMAP 3D   & \textbf{0,958} & $-0{,}101$ & 0,773 & 0,364 \\
+    Original (768 dims) & --    & $-0{,}003$ & \textbf{0,798} & 0,351 \\
+    Mayoría             & --    & --         & 0,347 & -- \\
     \bottomrule
   \end{tabular}
 \end{table}
@@ -271,26 +275,26 @@ coherencia local (kNN) sin separación global de categorías gruesas.}
 
 \begin{table}[H]
   \centering
-  \caption{Comparación sobre la submuestra de 5.000 videos ($\mathcal{I}_S$).}
+  \caption{Comparación de las seis representaciones sobre los 34.771 videos de $\mathcal{I}_S$.}
   \label{tab:multimodal}
   \begin{tabular}{lrrr}
     \toprule
     Representación & kNN original & kNN UMAP & NMI (UMAP) \\
     \midrule
-    Mayoría                       & 0,346 & -- & -- \\
-    TF-IDF + SVD                  & 0,564 & 0,509 & 0,138 \\
-    MiniLM                        & 0,635 & 0,622 & 0,286 \\
-    Texto, $X^{T}$                & 0,755 & 0,726 & 0,376 \\
-    Imagen, $X^{I}$               & 0,742 & 0,732 & 0,392 \\
-    Fusión temprana, $X^{IT}$     & 0,770 & 0,736 & 0,362 \\
-    Fusión tardía, $X^{F}$        & \textbf{0,792} & \textbf{0,784} & \textbf{0,462} \\
+    Mayoría                       & 0,347 & -- & -- \\
+    TF-IDF + SVD                  & 0,609 & 0,560 & 0,134 \\
+    MiniLM                        & 0,698 & 0,675 & 0,297 \\
+    Texto, $X^{T}$                & 0,798 & 0,771 & 0,378 \\
+    Imagen, $X^{I}$               & 0,784 & 0,769 & 0,391 \\
+    Fusión temprana, $X^{IT}$     & 0,819 & 0,791 & 0,364 \\
+    Fusión tardía, $X^{F}$        & \textbf{0,838} & \textbf{0,823} & \textbf{0,452} \\
     \bottomrule
   \end{tabular}
 \end{table}
 
-\todo{Comentar: la miniatura sola casi iguala al texto; la fusión tardía es la mejor y no
-cuesta cómputo extra; la temprana apenas mejora al texto (hipótesis: el texto domina el input).
-Advertir que los valores son menores que en la Tabla~\ref{tab:texto} por el tamaño de la muestra.}
+\todo{Comentar: la miniatura sola casi iguala al texto; la fusión tardía es la mejor en las tres
+métricas y no cuesta cómputo extra; la temprana mejora al texto, pero bastante menos que la tardía
+(hipótesis: el texto domina el input).}
 
 \figura{metricas_multimodal.png}{0.95}{Texto frente a imagen y fusión.}{fig:metricas-multimodal}
 \figura{vecinos.png}{0.95}{Vecinos más cercanos de un video en los espacios de texto, imagen y fusión.}{fig:vecinos}
@@ -305,7 +309,7 @@ Advertir que los valores son menores que en la Tabla~\ref{tab:texto} por el tama
     \toprule
     & hit@1 & hit@5 & hit@10 \\
     \midrule
-    Imagen, $X^{I}$ & 32,2\,\% & 59,7\,\% & 70,7\,\% \\
+    Imagen, $X^{I}$ & 32,2\,\% & 60,0\,\% & 70,2\,\% \\
     \bottomrule
   \end{tabular}
 \end{table}
@@ -322,14 +326,18 @@ Advertir que los valores son menores que en la Tabla~\ref{tab:texto} por el tama
         juntan al centrar cada modalidad.
   \item \textbf{Sesgo por idioma}: TF-IDF agrupa por idioma más que por tema.
   \item \textbf{Fusión tardía frente a temprana}.
-  \item \textbf{Etiquetas gruesas}: \texttt{Vertical1} subestima la calidad de las representaciones.
 \end{itemize}
 
 \section{Limitaciones}
 \begin{itemize}
-  \item Las imágenes se evaluaron sobre una submuestra de 5.000 videos.
-  \item Las etiquetas de YT-8M son automáticas y podrían usar metadatos del video, lo que
-        favorecería a los embeddings de texto. \todo{verificar en~\cite{yt8m}}
+  \item Las etiquetas de YT-8M fueron generadas por el sistema de anotación de YouTube a partir
+        de ``señales humanas, incluyendo metadatos y clics de búsqueda''~\cite{yt8m}. Como en parte
+        provienen del texto del video, la evaluación podría favorecer a los embeddings de texto
+        frente a los de imagen.
+  \item La categoría $c_i$ es gruesa (25 valores) y es una sola por video, aunque el video tenga
+        varias etiquetas: un video de un juego de carreras puede ser \emph{Games} o
+        \emph{Autos \& Vehicles}. Las métricas basadas en $c_i$ son, por lo tanto, una cota
+        inferior de la calidad de las representaciones.
   \item Truncación de texto (256 tokens en Gemma~2, 128 en MiniLM).
   \item El 16\,\% de los videos ya no está disponible, lo que puede sesgar la muestra.
 \end{itemize}
@@ -337,7 +345,7 @@ Advertir que los valores son menores que en la Tabla~\ref{tab:texto} por el tama
 \section{Trabajo futuro}
 \begin{itemize}
   \item HDBSCAN sobre UMAP y sensibilidad a \texttt{n\_neighbors}.
-  \item Embeber las miniaturas de los 34.788 videos.
+  \item Usar la fusión tardía, la mejor representación medida, en el mapa de la aplicación web.
   \item Recomendador \emph{fuera de la burbuja}, evaluado con novedad, diversidad y cobertura.
   \item Análisis causal: efecto del tema o de la miniatura sobre las vistas.
 \end{itemize}

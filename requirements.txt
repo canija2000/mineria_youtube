@@ -14,3 +14,6 @@ ipykernel
 nbformat
 seaborn
 matplotlib
+tensorflow
+fastapi
+uvicorn[standard]

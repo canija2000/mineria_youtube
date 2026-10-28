@@ -1,0 +1,2070 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mapa de YouTube</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=Newsreader:opsz,wght@6..72,500;6..72,600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0B0D10;
+    --panel: #101318;
+    --panel-2: #161B22;
+    --line: #222730;
+    --line-strong: #303744;
+    --text: #ECEEEF;
+    --muted: #848D9A;
+    --cyan: #4DA3FF;
+    --amber: #E2A336;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    height: 100%;
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'IBM Plex Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+    -webkit-font-smoothing: antialiased;
+    overflow: hidden;
+  }
+  .app { display: grid; grid-template-rows: 56px 1fr; height: 100vh; }
+  header {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    padding: 0 20px;
+    background: var(--panel);
+    border-bottom: 1px solid var(--line);
+  }
+  .brand {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    font-family: 'Newsreader', Georgia, serif;
+    font-weight: 600;
+    font-size: 19px;
+    letter-spacing: -0.01em;
+    white-space: nowrap;
+    color: var(--text);
+  }
+  .brand i {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    border: 2px solid var(--cyan);
+    display: inline-block;
+  }
+  .search { flex: 1; display: flex; align-items: center; gap: 8px; max-width: 820px; }
+  .seg {
+    display: flex;
+    background: var(--bg);
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    padding: 2px;
+  }
+  .seg button {
+    background: none;
+    border: 0;
+    color: var(--muted);
+    font: 500 12.5px 'IBM Plex Sans';
+    padding: 5px 11px;
+    border-radius: 3px;
+    cursor: pointer;
+    transition: color 0.15s, background 0.15s;
+  }
+  .seg button:hover { color: var(--text); }
+  .seg button.on { background: var(--panel-2); color: var(--text); }
+  .field { flex: 1; position: relative; display: flex; align-items: center; gap: 6px; }
+  .field input {
+    width: 100%;
+    background: var(--bg);
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    color: var(--text);
+    font: 13.5px 'IBM Plex Sans';
+    padding: 8px 12px;
+    outline: none;
+    transition: border-color 0.15s;
+  }
+  .field input:focus, .field input.filled, .field.dragover input { border-color: var(--cyan); }
+  .field input::placeholder { color: #555E6B; }
+  .upload-btn {
+    display: none;
+    align-items: center;
+    gap: 5px;
+    background: var(--panel-2);
+    border: 1px solid var(--line-strong);
+    color: var(--text);
+    border-radius: 4px;
+    font: 500 12px 'IBM Plex Sans';
+    padding: 8px 11px;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .upload-btn:hover { border-color: var(--cyan); }
+  .upload-btn.visible { display: inline-flex; }
+  .go {
+    background: var(--text);
+    color: var(--bg);
+    border: 1px solid var(--text);
+    border-radius: 4px;
+    font: 600 12.5px 'IBM Plex Sans';
+    padding: 8px 14px;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: opacity 0.15s;
+  }
+  .go:hover { opacity: 0.9; }
+  .meta {
+    margin-left: auto;
+    color: var(--muted);
+    font: 11.5px 'JetBrains Mono';
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+  main { position: relative; display: grid; grid-template-columns: 244px 1fr; min-height: 0; }
+  main.with-right { grid-template-columns: 244px 1fr 424px; }
+  aside.left {
+    background: var(--panel);
+    border-right: 1px solid var(--line);
+    padding: 16px 18px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+  aside.right {
+    background: #0C0E12;
+    border-left: 1px solid var(--line);
+    padding: 12px;
+    display: none;
+    flex-direction: column;
+    gap: 11px;
+    overflow-y: auto;
+    max-height: calc(100vh - 56px);
+  }
+  main.with-right aside.right { display: flex; }
+  aside.right > * { flex-shrink: 0; }
+  aside.right::-webkit-scrollbar { width: 5px; }
+  aside.right::-webkit-scrollbar-track { background: #0C0E12; }
+  aside.right::-webkit-scrollbar-thumb { background: var(--line); }
+  aside.right::-webkit-scrollbar-thumb:hover { background: var(--muted); }
+
+  /* Tarjetas modulares del panel derecho (3 componentes separados) */
+  .panel-card {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 5px;
+    padding: 14px 15px;
+    display: flex;
+    flex-direction: column;
+    gap: 11px;
+  }
+  .card-divider {
+    height: 1px;
+    background: var(--line);
+    margin: 2px 0;
+  }
+
+  h4 {
+    font: 600 10px 'JetBrains Mono';
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+  .proj { display: flex; flex-direction: column; gap: 4px; }
+  .proj label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    color: var(--muted);
+    padding: 4px 6px;
+    border-radius: 3px;
+    cursor: pointer;
+    transition: background 0.12s, color 0.12s;
+  }
+  .proj label:hover:not(.disabled) { background: var(--panel-2); color: var(--text); }
+  .proj label.on { color: var(--text); background: var(--panel-2); }
+  .proj label.disabled { opacity: 0.42; cursor: not-allowed; }
+  .proj label span { width: 11px; height: 11px; border-radius: 50%; border: 1.5px solid #454E5C; flex: none; }
+  .proj label.on span { border-color: var(--cyan); background: radial-gradient(var(--cyan) 38%, transparent 44%); }
+  .proj label small { margin-left: auto; font: 10px 'JetBrains Mono'; color: var(--muted); }
+  .color-by { display: flex; gap: 2px; padding: 2px; border: 1px solid var(--line-strong); border-radius: 7px; }
+  .color-by button {
+    flex: 1; padding: 5px 0; border: 0; border-radius: 5px; background: transparent;
+    color: var(--muted); font: 11.5px 'JetBrains Mono'; cursor: pointer;
+  }
+  .color-by button:hover { color: var(--text); }
+  .color-by button.on { background: var(--panel-2); color: var(--text); }
+  .legend { display: flex; flex-direction: column; gap: 2px; font-size: 12.5px; min-height: 0; overflow-y: auto; margin-right: -8px; padding-right: 8px; }
+  .legend div {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 6px;
+    border-radius: 3px;
+    cursor: pointer;
+    transition: background 0.12s, opacity 0.12s;
+  }
+  .legend div:hover { background: var(--panel-2); }
+  .legend div.dim { opacity: 0.32; }
+  .legend div.active { background: var(--panel-2); outline: 1px solid var(--line-strong); }
+  .legend b { width: 8px; height: 8px; border-radius: 50%; flex: none; }
+  .legend em { margin-left: auto; font: normal 11.5px 'JetBrains Mono'; font-variant-numeric: tabular-nums; color: var(--muted); }
+  #view { position: relative; min-width: 0; overflow: hidden; }
+  canvas { display: block; }
+  .hint { position: absolute; left: 16px; bottom: 14px; color: var(--muted); font: 11.5px 'JetBrains Mono'; pointer-events: none; }
+  .tip {
+    position: absolute;
+    pointer-events: none;
+    background: rgba(16, 19, 24, 0.96);
+    border: 1px solid var(--line-strong);
+    border-radius: 4px;
+    padding: 8px 10px;
+    font-size: 12.5px;
+    max-width: 280px;
+    display: none;
+    z-index: 10;
+  }
+  .tip small { display: block; color: var(--muted); font: 11px 'JetBrains Mono'; margin-top: 3px; }
+  #landmarks { position: absolute; inset: 0; pointer-events: none; overflow: hidden; z-index: 5; }
+  .landmark {
+    position: absolute;
+    transform: translate(-50%, -100%);
+    pointer-events: auto;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    background: rgba(16, 19, 24, 0.92);
+    border: 1px solid var(--cyan);
+    color: var(--text);
+    font: 500 11px 'JetBrains Mono';
+    padding: 3px 7px;
+    border-radius: 3px;
+    cursor: pointer;
+    white-space: nowrap;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.45);
+  }
+  .landmark::after {
+    content: '';
+    position: absolute;
+    left: 50%;
+    bottom: -5px;
+    transform: translateX(-50%);
+    border-left: 4px solid transparent;
+    border-right: 4px solid transparent;
+    border-top: 5px solid var(--cyan);
+  }
+  .landmark:hover { background: var(--panel-2); }
+  .landmark button {
+    background: none;
+    border: 0;
+    color: var(--muted);
+    font: 11px 'JetBrains Mono';
+    cursor: pointer;
+    padding: 0 1px;
+  }
+  .landmark button:hover { color: var(--text); }
+  .loading {
+    position: absolute;
+    inset: 0;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    background: rgba(11, 13, 16, 0.78);
+    z-index: 20;
+  }
+  .loading.on { display: flex; }
+  .card { background: var(--panel); border: 1px solid var(--line-strong); border-radius: 6px; padding: 24px 26px; width: 440px; }
+  .card h3 { font: 600 19px 'Newsreader', Georgia, serif; margin-bottom: 4px; }
+  .card p.sub { color: var(--muted); font: 12px 'JetBrains Mono'; margin-bottom: 16px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .steps { list-style: none; display: flex; flex-direction: column; gap: 10px; font-size: 13px; }
+  .steps li { display: flex; align-items: center; gap: 10px; color: #555E6B; }
+  .steps li.done { color: var(--text); }
+  .steps li.now { color: var(--text); font-weight: 500; }
+  .steps li i { width: 12px; height: 12px; border-radius: 50%; border: 1.5px solid #353C47; flex: none; }
+  .steps li.done i { border-color: var(--cyan); background: var(--cyan); }
+  .steps li.now i { border-color: var(--cyan); border-right-color: transparent; animation: spin .9s linear infinite; }
+  .steps li code { margin-left: auto; font: 11px 'JetBrains Mono'; color: var(--muted); }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .bar { height: 3px; background: var(--bg); margin-top: 18px; overflow: hidden; }
+  .bar div { height: 100%; width: 62%; background: var(--cyan); }
+
+  /* Componente 1: Video, Metadatos y Extracto */
+  .vid { display: flex; flex-direction: column; gap: 9px; }
+  .vid a.vid-thumb-link {
+    position: relative;
+    display: block;
+    width: 100%;
+    border-radius: 4px;
+    border: 1px solid var(--line);
+    overflow: hidden;
+    text-decoration: none;
+    aspect-ratio: 16/9;
+    background: var(--bg);
+  }
+  .vid a.vid-thumb-link img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .vid a.vid-thumb-link:hover .play-overlay { opacity: 1; }
+  .play-overlay {
+    position: absolute;
+    inset: 0;
+    background: rgba(11, 13, 16, 0.58);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    transition: opacity 0.15s;
+    color: var(--text);
+    font: 500 12px 'JetBrains Mono';
+    gap: 6px;
+  }
+  .vid a.title-link {
+    color: var(--text);
+    text-decoration: none;
+    font: 500 17px/1.3 'Newsreader', Georgia, serif;
+    display: inline-block;
+  }
+  .vid a.title-link:hover { color: var(--cyan); }
+  .channel-line { font-size: 12.5px; color: var(--muted); }
+  .channel-line strong { color: var(--text); font-weight: 500; }
+
+  .meta-strip {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    border-top: 1px solid var(--line);
+    border-bottom: 1px solid var(--line);
+    padding: 9px 0;
+    gap: 8px 12px;
+  }
+  .meta-item {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    font-size: 12px;
+    color: var(--muted);
+  }
+  .meta-item svg {
+    width: 13.5px;
+    height: 13.5px;
+    stroke: var(--muted);
+    fill: none;
+    stroke-width: 1.7;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    flex: none;
+  }
+  .meta-item b {
+    color: var(--text);
+    font: 500 12px 'JetBrains Mono';
+    font-variant-numeric: tabular-nums;
+  }
+
+  .desc-box {
+    font-size: 12px;
+    line-height: 1.48;
+    color: var(--muted);
+    max-height: 78px;
+    overflow-y: auto;
+    padding-right: 4px;
+  }
+  .desc-box::-webkit-scrollbar { width: 3px; }
+  .desc-box::-webkit-scrollbar-thumb { background: var(--line); }
+
+  /* Componente 2: Clasificación y Conceptos Zero-Shot */
+  .cat-header {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 8px;
+  }
+  .cat-primary {
+    font-size: 13.5px;
+    font-weight: 500;
+    color: var(--text);
+    display: flex;
+    align-items: center;
+    gap: 7px;
+  }
+  .cat-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--cyan); display: inline-block; }
+  .cat-method { font: 11px 'JetBrains Mono'; color: var(--muted); }
+  .knn-list { display: flex; flex-direction: column; gap: 4px; margin-top: 2px; }
+  .knn-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 72px 36px;
+    gap: 8px;
+    align-items: center;
+    font-size: 11.5px;
+    color: var(--muted);
+  }
+  .knn-row span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .knn-bar { height: 3px; background: var(--bg); overflow: hidden; }
+  .knn-bar i { display: block; height: 100%; background: var(--cyan); }
+  .knn-row code { font: 11px 'JetBrains Mono'; font-variant-numeric: tabular-nums; color: var(--muted); text-align: right; }
+
+  .tags-wrap { display: flex; flex-wrap: wrap; gap: 5px; }
+  .tag-chip {
+    background: var(--bg);
+    border: 1px solid var(--line);
+    border-radius: 3px;
+    padding: 3px 7px;
+    font-size: 11.5px;
+    color: var(--text);
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    transition: border-color 0.12s, background 0.12s;
+  }
+  .tag-chip:hover { border-color: var(--cyan); background: var(--panel-2); }
+  .tag-chip small { font: 500 10.5px 'JetBrains Mono'; font-variant-numeric: tabular-nums; }
+
+  /* Componente 3: Relaciones en el espacio y Heatmap de coseno */
+  .heat-legend {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 6px;
+    padding: 7px 8px;
+    background: var(--bg);
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    font: 10px 'JetBrains Mono';
+    font-variant-numeric: tabular-nums;
+    color: var(--muted);
+  }
+  .heat-legend span {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    text-align: center;
+  }
+  .heat-legend i {
+    width: 100%;
+    height: 4px;
+    border-radius: 2px;
+    display: block;
+  }
+  .nb-tabs {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    background: var(--bg);
+    padding: 2px;
+  }
+  .nb-tabs button {
+    background: none;
+    border: 0;
+    color: var(--muted);
+    font: 500 12px 'IBM Plex Sans';
+    padding: 5px 8px;
+    border-radius: 3px;
+    cursor: pointer;
+    transition: all 0.12s;
+  }
+  .nb-tabs button:hover { color: var(--text); }
+  .nb-tabs button.on-near { background: var(--panel-2); color: var(--text); }
+  .nb-tabs button.on-far { background: var(--panel-2); color: var(--amber); }
+  .nb-subhint {
+    font: 11px 'JetBrains Mono';
+    color: var(--muted);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .nb { display: flex; flex-direction: column; border-top: 1px solid var(--line); }
+  .nb-card {
+    display: grid;
+    grid-template-columns: 72px 1fr auto;
+    gap: 10px;
+    align-items: center;
+    font-size: 12px;
+    line-height: 1.3;
+    padding: 9px 0;
+    border-bottom: 1px solid var(--line);
+  }
+  .nb-card:last-child { border-bottom: 0; padding-bottom: 2px; }
+  .nb-card img {
+    width: 72px;
+    height: 41px;
+    object-fit: cover;
+    border-radius: 3px;
+    border: 1px solid var(--line);
+    background: var(--bg);
+    display: block;
+  }
+  .nb-info { display: flex; flex-direction: column; gap: 2.5px; min-width: 0; }
+  .nb-title {
+    font-weight: 500;
+    color: var(--text);
+    text-decoration: none;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: block;
+  }
+  .nb-title:hover { color: var(--cyan); }
+  .nb-meta { font-size: 11px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .nb-actions { display: flex; flex-direction: column; align-items: flex-end; gap: 5px; }
+  .sim-badge {
+    font: 500 10.5px 'JetBrains Mono';
+    font-variant-numeric: tabular-nums;
+    padding: 2px 6px;
+    border-radius: 3px;
+    border: 1px solid transparent;
+    white-space: nowrap;
+  }
+  .nb-btn-row { display: flex; gap: 4px; }
+  .btn-action {
+    background: none;
+    border: 1px solid var(--line);
+    border-radius: 3px;
+    color: var(--muted);
+    padding: 2.5px 6px;
+    font: 11px 'IBM Plex Sans';
+    cursor: pointer;
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    transition: border-color 0.12s, color 0.12s, background 0.12s;
+  }
+  .btn-action:hover { border-color: var(--line-strong); color: var(--text); background: var(--panel-2); }
+  .btn-action.active { border-color: var(--amber); color: var(--amber); background: rgba(226, 163, 54, 0.1); }
+
+  .bars { display: flex; flex-direction: column; gap: 7px; font-size: 12.5px; }
+  .bars div { display: grid; grid-template-columns: 1fr 110px 28px; gap: 8px; align-items: center; }
+  .bars span { height: 4px; background: var(--cyan); }
+  .bars code { font: 11.5px 'JetBrains Mono'; color: var(--muted); text-align: right; }
+  .timeline { position: absolute; left: 0; right: 0; bottom: 0; background: rgba(16, 19, 24, .97); border-top: 1px solid var(--line); padding: 14px 18px 16px; display: none; }
+  .timeline.on { display: block; }
+  .tl-head { display: flex; align-items: baseline; gap: 12px; margin-bottom: 12px; }
+  .tl-head small { color: var(--muted); font-size: 12px; }
+  .track { position: relative; height: 2px; background: var(--line); margin: 0 0 14px; }
+  .track b { position: absolute; top: -4px; width: 10px; height: 10px; border-radius: 50%; background: var(--cyan); transform: translateX(-50%); }
+  .frames { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+  .frame { display: grid; grid-template-columns: 132px 1fr; gap: 12px; background: var(--bg); border: 1px solid var(--line); border-radius: 4px; padding: 10px; }
+  .frame img { width: 132px; height: 74px; object-fit: cover; border-radius: 3px; }
+  .frame code { font: 11.5px 'JetBrains Mono'; color: var(--cyan); }
+  .words { display: flex; flex-direction: column; gap: 4px; margin-top: 4px; font-size: 12px; }
+  .words div { display: grid; grid-template-columns: minmax(0, 1fr) 36px; gap: 8px; align-items: center; }
+  .words em { font-style: normal; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .words span { height: 3px; background: var(--cyan); }
+  .tag { position: absolute; right: 14px; top: 12px; font: 11px 'JetBrains Mono'; color: var(--muted); pointer-events: none; }
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <div class="brand"><i></i>Mapa de YouTube</div>
+    <div class="search">
+      <div class="seg">
+        <button id="m-video" class="on">Video</button>
+        <button id="m-image">Imagen</button>
+        <button id="m-concept">Concepto</button>
+        <button id="m-profile">Perfil</button>
+      </div>
+      <div class="field" id="search-field">
+        <input id="q" placeholder="Pega el link o ID de un video de YouTube…">
+        <input type="file" id="img-file" accept="image/jpeg,image/png,image/webp" hidden>
+        <button type="button" class="upload-btn" id="btn-upload" title="Elegir o arrastrar archivo de imagen (no se guarda en BDD)">Subir archivo…</button>
+      </div>
+      <button class="go" id="go">Ubicar en el mapa</button>
+    </div>
+    <div class="meta">cargando mapa…</div>
+  </header>
+  <main id="main">
+    <aside class="left">
+      <div><h4>Representación</h4></div>
+      <div class="proj">
+        <label id="rep-text" class="on" onclick="switchRepresentation('text')"><span></span>Texto<small id="count-text">—</small></label>
+        <label id="rep-image" onclick="switchRepresentation('image')"><span></span>Imagen<small id="count-image">—</small></label>
+        <label class="disabled" title="Próximamente"><span></span>Fusión temprana</label>
+        <label class="disabled" title="Próximamente"><span></span>Fusión tardía</label>
+      </div>
+      <div><h4>Colorear por</h4></div>
+      <div class="color-by" id="color-by">
+        <button id="cb-vertical" class="on" onclick="setColorMode('vertical')" title="Categoría de YouTube según las etiquetas de YT-8M">YouTube</button>
+        <button id="cb-cluster" onclick="setColorMode('cluster')" title="Grupos que HDBSCAN encuentra en el mapa, con nombre zero-shot">HDBSCAN</button>
+      </div>
+      <div><h4 id="legend-title">Categorías</h4></div>
+      <div class="legend" id="legend"></div>
+    </aside>
+    <div id="view">
+      <div id="landmarks"></div>
+      <div class="tip" id="tip"></div>
+      <div class="hint">Arrastra para rotar · rueda para zoom · pasa el mouse sobre un punto</div>
+      <div class="tag">mapa base</div>
+      <div class="loading" id="loading"><div class="card" id="loadcard"></div></div>
+      <div class="timeline" id="timeline"></div>
+    </div>
+    <aside class="right" id="right"></aside>
+  </main>
+</div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<script>
+const API_BASE = (window.location.origin === 'null' || window.location.protocol === 'file:') ? 'http://127.0.0.1:8000' : '';
+// D se llena con la respuesta de /map (applyMapPayload)
+let D = { cats: [], ids: [], titles: [], cat: [], pts: [], info: {}, parts: { vertical: { cats: [], cat: [] }, cluster: null } };
+let currentRepresentation = 'text';
+const PALETTE = ['#4DA3FF', '#E2A336', '#D96B62', '#68B87A', '#9D7FE8', '#D97EB0', '#54B8B1', '#E08258', '#869CEB', '#C4BE62',
+  '#2F7FD8', '#B97F1E', '#B04A42', '#478F57', '#7558C4', '#B0588A', '#2F928B', '#B85F37', '#5E74C4', '#9C9640'];
+// Colorear por categoría de YouTube ('vertical') o por grupo HDBSCAN ('cluster')
+let colorMode = 'vertical';
+let currentRenderer = null;   // función que dibujó el panel derecho actual (para re-dibujarlo)
+const nColored = () => colorMode === 'cluster' ? PALETTE.length : 10;
+const OTHER = '#4B5563';
+const colorOf = c => c < nColored() ? PALETTE[c] : OTHER;
+const thumb = id => 'https://i.ytimg.com/vi/' + id + '/mqdefault.jpg';
+let idx = Object.fromEntries((D.ids || []).map((y, i) => [y, i]));
+const fmtDur = d => {
+  const m = /PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/.exec(d || '') || [];
+  const h = +m[1] || 0, min = +m[2] || 0, sec = +m[3] || 0;
+  const s = h * 3600 + min * 60 + sec;
+  const txt = h > 0 ? `${h}:${String(min).padStart(2, '0')}:${String(sec).padStart(2, '0')}` : `${min}:${String(sec).padStart(2, '0')}`;
+  return { s, txt };
+};
+const mmss = s => Math.floor(s / 60) + ':' + String(Math.round(s % 60)).padStart(2, '0');
+
+// Escala de color (heatmap) para similitud coseno s in [-1, 1] y distancia coseno d = 1 - s
+function getHeatmapInfo(similarity, distance3d, isFar) {
+  let sim = similarity;
+  if (sim == null && distance3d != null) {
+    sim = Math.max(0.50, Math.min(0.95, 0.95 - (distance3d / 12) * 0.40));
+  }
+  if (sim == null) {
+    sim = isFar ? 0.58 : 0.85;
+  }
+  const dCos = Math.max(0, 1 - sim);
+  let fg, bg, border, hex;
+  if (sim > 0.90) {
+    fg = '#4ADE80'; bg = 'rgba(74, 222, 128, 0.12)'; border = 'rgba(74, 222, 128, 0.35)'; hex = 0x4ADE80;
+  } else if (sim > 0.80) {
+    fg = '#2EA043'; bg = 'rgba(46, 160, 67, 0.14)'; border = 'rgba(46, 160, 67, 0.38)'; hex = 0x2EA043;
+  } else if (sim > 0.70) {
+    fg = '#58A6FF'; bg = 'rgba(88, 166, 255, 0.12)'; border = 'rgba(88, 166, 255, 0.35)'; hex = 0x58A6FF;
+  } else if (sim > 0.60) {
+    fg = '#E2A336'; bg = 'rgba(226, 163, 54, 0.12)'; border = 'rgba(226, 163, 54, 0.35)'; hex = 0xE2A336;
+  } else {
+    fg = '#E5534B'; bg = 'rgba(229, 83, 75, 0.12)'; border = 'rgba(229, 83, 75, 0.35)'; hex = 0xE5534B;
+  }
+  const label = similarity != null
+    ? `sim ${sim.toFixed(2)} · d ${dCos.toFixed(2)}`
+    : `~sim ${sim.toFixed(2)} · d ${dCos.toFixed(2)}`;
+  return { sim, dCos, fg, bg, border, hex, label };
+}
+
+// Iconos vectoriales minimalistas
+const ICONS = {
+  eye: `<svg viewBox="0 0 24 24"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>`,
+  like: `<svg viewBox="0 0 24 24"><path d="M7 10v12"/><path d="M15 5.88 14 10h5.83a2 2 0 0 1 1.92 2.56l-2.33 8A2 2 0 0 1 17.5 22H4a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2h2.76a2 2 0 0 0 1.79-1.11L12 2a3.13 3.13 0 0 1 3 3.88Z"/></svg>`,
+  clock: `<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>`,
+  calendar: `<svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>`
+};
+
+// Leyenda + filtro interactivo por categoría
+let activeCatFilter = null;
+
+function applyCategoryFilter(catIdx) {
+  if (catIdx !== null && activeCatFilter === catIdx) {
+    activeCatFilter = null;
+  } else {
+    activeCatFilter = catIdx;
+  }
+  if (base && base.geometry && base.geometry.attributes.color) {
+    const colAttr = base.geometry.attributes.color;
+    const dimColor = new THREE.Color('#181D24');
+    for (let i = 0; i < P.length; i++) {
+      const cIdx = D.cat[i];
+      const matches = activeCatFilter === null
+        || (activeCatFilter === 'other' ? cIdx >= nColored() : cIdx === activeCatFilter);
+      const c = matches ? new THREE.Color(colorOf(cIdx)) : dimColor;
+      colAttr.setXYZ(i, c.r, c.g, c.b);
+    }
+    colAttr.needsUpdate = true;
+  }
+  updateLegend();
+}
+
+function updateLegend() {
+  if (!D.cats || !D.cats.length) return;
+  const n = nColored();
+  const counts = D.cats.map((_, c) => D.cat.filter(x => x === c).length);
+  const otros = colorMode === 'cluster' ? 'Otros grupos' : 'Otras';
+  document.getElementById('legend').innerHTML = D.cats.slice(0, n).map((name, c) => {
+    const cls = activeCatFilter === null ? '' : (activeCatFilter === c ? 'active' : 'dim');
+    return `<div class="${cls}" onclick="applyCategoryFilter(${c})" title="Filtrar: ${name}"><b style="background:${colorOf(c)}"></b>${name}<em>${counts[c] || 0}</em></div>`;
+  }).join('') +
+    (D.cats.length > n ? (() => {
+      const cls = activeCatFilter === null ? '' : (activeCatFilter === 'other' ? 'active' : 'dim');
+      return `<div class="${cls}" onclick="applyCategoryFilter('other')" title="Filtrar el resto"><b style="background:${OTHER}"></b>${otros} ${D.cats.length - n}<em>${counts.slice(n).reduce((a, b) => a + b, 0)}</em></div>`;
+    })() : '');
+}
+updateLegend();
+
+// Escena 3D
+const view = document.getElementById('view');
+const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+renderer.setPixelRatio(window.devicePixelRatio);
+renderer.setClearColor(0x0B0D10);
+view.prepend(renderer.domElement);
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(50, 1, 0.1, 500);
+const controls = new THREE.OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+
+let P = D.pts || [];
+let mean = [0, 1, 2].map(k => P.reduce((a, p) => a + p[k], 0) / (P.length || 1));
+let rad = Math.max(...P.map(p => Math.hypot(p[0] - mean[0], p[1] - mean[1], p[2] - mean[2]))) || 1;
+const coordToVector3 = coords => new THREE.Vector3(...[0, 1, 2].map(k => (coords[k] - mean[k]) / rad * 14));
+let pos = i => P[i] ? coordToVector3(P[i]) : new THREE.Vector3();
+
+function disc() {
+  const c = document.createElement('canvas'); c.width = c.height = 64;
+  const g = c.getContext('2d'); g.fillStyle = '#fff'; g.beginPath(); g.arc(32, 32, 26, 0, 7); g.fill();
+  return new THREE.CanvasTexture(c);
+}
+function ring() {
+  const c = document.createElement('canvas'); c.width = c.height = 128;
+  const g = c.getContext('2d'); g.strokeStyle = '#fff'; g.lineWidth = 4; g.beginPath(); g.arc(64, 64, 54, 0, 7); g.stroke();
+  return new THREE.CanvasTexture(c);
+}
+const DISC = disc(), RING = ring();
+
+function cloud(ids, colors, size, opacity) {
+  const g = new THREE.BufferGeometry();
+  const arr = new Float32Array(ids.length * 3), col = new Float32Array(ids.length * 3);
+  ids.forEach((i, k) => { pos(i).toArray(arr, k * 3); new THREE.Color(colors(i)).toArray(col, k * 3); });
+  g.setAttribute('position', new THREE.BufferAttribute(arr, 3));
+  g.setAttribute('color', new THREE.BufferAttribute(col, 3));
+  const m = new THREE.PointsMaterial({ size, map: DISC, vertexColors: true, transparent: true, opacity, alphaTest: 0.02, depthWrite: false });
+  return new THREE.Points(g, m);
+}
+let all = [...P.keys()];
+let base = cloud(all, i => colorOf(D.cat[i]), 0.15, 0.85);
+scene.add(base);
+let overlay = new THREE.Group(); scene.add(overlay);
+
+// Una partición del mapa (categorías de YouTube o grupos HDBSCAN), ordenada por tamaño:
+// el índice 0 es la más grande, así los colores van a las más grandes y las "(…)" quedan al final.
+function partition(names, perPoint, emptyLabel) {
+  const raw = (names || []).slice();
+  raw.push(emptyLabel);
+  const emptyIdx = raw.length - 1;
+  const perPt = perPoint.map(v => v < 0 ? emptyIdx : v);
+  const freq = raw.map((name, i) => ({ name, i, count: 0 }));
+  perPt.forEach(c => { if (freq[c]) freq[c].count++; });
+  freq.sort((a, b) => {
+    const aUnk = a.name.startsWith('(') ? 1 : 0;
+    const bUnk = b.name.startsWith('(') ? 1 : 0;
+    if (aUnk !== bUnk) return aUnk - bUnk;
+    return b.count - a.count;
+  });
+  const oldToNew = Object.fromEntries(freq.map((f, newIdx) => [f.i, newIdx]));
+  const cats = freq.filter(f => f.count > 0 || !f.name.startsWith('(')).map(f => f.name);
+  return { cats, cat: perPt.map(oldIdx => oldToNew[oldIdx] ?? (cats.length - 1)) };
+}
+
+function applyColorMode() {
+  const part = (colorMode === 'cluster' && D.parts.cluster) ? D.parts.cluster : D.parts.vertical;
+  D.cats = part.cats;
+  D.cat = part.cat;
+  document.getElementById('legend-title').textContent = colorMode === 'cluster' ? 'Grupos HDBSCAN' : 'Categorías';
+}
+
+function setColorMode(mode) {
+  if (mode === colorMode || (mode === 'cluster' && !D.parts.cluster)) return;
+  colorMode = mode;
+  document.getElementById('cb-vertical').classList.toggle('on', mode === 'vertical');
+  document.getElementById('cb-cluster').classList.toggle('on', mode === 'cluster');
+  applyColorMode();
+  applyCategoryFilter(null);     // quita el filtro y repinta todos los puntos con la nueva partición
+  if (currentVideoData && currentRenderer) currentRenderer(currentVideoData);   // el panel también cambia
+}
+
+function applyMapPayload(data, rep) {
+  const p = data.points;
+  D.parts = {
+    vertical: partition(data.verticals, p.vertical, '(Sin categoría)'),
+    cluster: (data.clusters && data.clusters.length && p.cluster)
+      ? partition(data.clusters, p.cluster, '(Sin grupo)') : null,
+  };
+  document.getElementById('color-by').style.display = D.parts.cluster ? '' : 'none';
+  if (!D.parts.cluster && colorMode === 'cluster') {
+    colorMode = 'vertical';
+    document.getElementById('cb-vertical').classList.add('on');
+    document.getElementById('cb-cluster').classList.remove('on');
+  }
+  applyColorMode();
+  D.ids = p.youtube_id;
+  D.titles = p.title;
+  D.pts = [];
+  D.info = D.info || {};
+  for (let i = 0; i < p.youtube_id.length; i++) {
+    D.pts.push([p.x[i], p.y[i], p.z[i]]);
+    const yid = p.youtube_id[i];
+    const prev = D.info[yid] || {};
+    D.info[yid] = {
+      ...prev,
+      t: p.title[i] || prev.t,
+      ch: p.channel_title[i] || prev.ch,
+      c: p.vertical[i] >= 0 ? data.verticals[p.vertical[i]] : '(Sin categoría)',
+      zs: (p.pred_names && p.pred_names[i]) ? p.pred_names[i] : prev.zs
+    };
+  }
+  idx = Object.fromEntries(D.ids.map((y, i) => [y, i]));
+  P = D.pts;
+  mean = [0, 1, 2].map(k => P.reduce((a, pt) => a + pt[k], 0) / P.length);
+  rad = Math.max(...P.map(pt => Math.hypot(pt[0] - mean[0], pt[1] - mean[1], pt[2] - mean[2]))) || 1;
+
+  activeCatFilter = null;
+  scene.remove(base);
+  all = [...P.keys()];
+  base = cloud(all, i => colorOf(D.cat[i]), rep === 'image' ? 0.19 : 0.15, 0.85);
+  scene.add(base);
+
+  updateLegend();
+
+  const repLabel = rep === 'image' ? 'Imagen (Miniaturas)' : 'Texto';
+  const metaTag = document.querySelector('.meta');
+  if (metaTag) metaTag.textContent = `${D.ids.length.toLocaleString('es-CL')} videos · ${repLabel} · UMAP 3D`;
+  const countEl = document.getElementById(rep === 'image' ? 'count-image' : 'count-text');
+  if (countEl) countEl.textContent = D.ids.length.toLocaleString('es-CL');
+  const tag = document.querySelector('.tag');
+  if (tag) tag.textContent = `${rep === 'image' ? 'espacio visual' : 'espacio textual'} · v${data.map_version}`;
+}
+
+async function loadServerMap(rep = 'text') {
+  const metaTag = document.querySelector('.meta');
+  try {
+    const res = await fetch(`${API_BASE}/map?rep=${rep}`);
+    if (!res.ok) throw new Error(`el servidor respondió ${res.status}`);
+    applyMapPayload(await res.json(), rep);
+  } catch (e) {
+    if (metaTag) metaTag.textContent = `No se pudo cargar el mapa (${e.message}). ¿Está corriendo el servidor?`;
+  }
+}
+loadServerMap('text');
+
+async function switchRepresentation(rep) {
+  if (rep !== 'text' && rep !== 'image') return;
+  if (currentRepresentation === rep) return;
+  currentRepresentation = rep;
+  document.getElementById('rep-text').classList.toggle('on', rep === 'text');
+  document.getElementById('rep-image').classList.toggle('on', rep === 'image');
+  clearResult();
+  await loadServerMap(rep);
+  setCamera(new THREE.Vector3(), 30);
+}
+
+function setCamera(target, dist, az = 0.9, el = 0.35) {
+  controls.target.copy(target);
+  camera.position.set(target.x + dist * Math.cos(el) * Math.cos(az), target.y + dist * Math.sin(el), target.z + dist * Math.cos(el) * Math.sin(az));
+  controls.update();
+}
+
+// Hitos de conceptos anclados al espacio 3D
+let pinnedConcepts = [];
+
+function addPinnedConcept(query, pos3d) {
+  const key = query.trim().toLowerCase();
+  const existing = pinnedConcepts.find(c => c.key === key);
+  if (existing) {
+    existing.pos3d = pos3d.clone();
+  } else {
+    pinnedConcepts.push({ key, query: query.trim(), pos3d: pos3d.clone() });
+  }
+  renderLandmarksDOM();
+}
+
+function removePinnedConcept(key, ev) {
+  if (ev) ev.stopPropagation();
+  pinnedConcepts = pinnedConcepts.filter(c => c.key !== key);
+  renderLandmarksDOM();
+}
+
+function renderLandmarksDOM() {
+  const container = document.getElementById('landmarks');
+  if (!container) return;
+  container.innerHTML = pinnedConcepts.map(c => `
+    <div class="landmark" data-key="${c.key}" onclick="selectConcept('${c.query.replace(/'/g, "\\'")}')" title="Re-enfocar concepto en el mapa 3D">
+      <span>«${c.query}»</span>
+      <button onclick="removePinnedConcept('${c.key.replace(/'/g, "\\'")}', event)" title="Quitar etiqueta del mapa">×</button>
+    </div>
+  `).join('');
+  updateLandmarksPositions();
+}
+
+function updateLandmarksPositions() {
+  if (!pinnedConcepts.length) return;
+  const container = document.getElementById('landmarks');
+  if (!container) return;
+  const r = renderer.domElement.getBoundingClientRect();
+  const els = container.querySelectorAll('.landmark');
+  els.forEach((el, i) => {
+    const item = pinnedConcepts[i];
+    if (!item) return;
+    const v = item.pos3d.clone().project(camera);
+    if (v.z > 1) {
+      el.style.display = 'none';
+      return;
+    }
+    const x = (v.x + 1) / 2 * r.width;
+    const y = (1 - v.y) / 2 * r.height;
+    el.style.display = 'inline-flex';
+    el.style.left = `${x}px`;
+    el.style.top = `${y - 8}px`;
+  });
+}
+
+// Tooltip
+const tip = document.getElementById('tip');
+function showTip(i) {
+  if (!P[i]) return;
+  const v = pos(i).project(camera), r = renderer.domElement.getBoundingClientRect();
+  const x = (v.x + 1) / 2 * r.width, y = (1 - v.y) / 2 * r.height;
+  const vert = D.parts.vertical, grp = D.parts.cluster;
+  const catName = (vert.cats[vert.cat[i]] || '') + (grp ? ` · grupo: ${grp.cats[grp.cat[i]] || ''}` : '');
+  tip.innerHTML = `${D.titles[i] || ''}<small>${catName}</small>`;
+  tip.style.left = (x + 14) + 'px'; tip.style.top = (y - 10) + 'px'; tip.style.display = 'block';
+}
+const ray = new THREE.Raycaster(); ray.params.Points.threshold = 0.22;
+renderer.domElement.addEventListener('mousemove', e => {
+  const r = renderer.domElement.getBoundingClientRect();
+  ray.setFromCamera({ x: (e.clientX - r.left) / r.width * 2 - 1, y: -(e.clientY - r.top) / r.height * 2 + 1 }, camera);
+  const hit = ray.intersectObject(base)[0];
+  if (hit) showTip(hit.index); else tip.style.display = 'none';
+});
+renderer.domElement.addEventListener('mouseleave', () => { tip.style.display = 'none'; });
+
+// Modo de entrada con memoria independiente por pestaña (Video / Imagen / Concepto / Perfil)
+let mode = 'video';
+const q = document.getElementById('q');
+const modeInputs = { video: '', image: '', concept: '', profile: '' };
+let pendingImageDataUrl = null;
+let pendingImageLabel = null;
+
+q.addEventListener('input', () => {
+  modeInputs[mode] = q.value;
+  if (mode === 'image' && q.value !== pendingImageLabel) {
+    pendingImageDataUrl = null;
+  }
+  q.classList.toggle('filled', Boolean(q.value.trim()));
+});
+
+function setMode(m, preserveCurrent = true) {
+  if (preserveCurrent) {
+    modeInputs[mode] = q.value;
+  }
+  mode = m;
+  document.getElementById('m-video').classList.toggle('on', m === 'video');
+  document.getElementById('m-image').classList.toggle('on', m === 'image');
+  document.getElementById('m-concept').classList.toggle('on', m === 'concept');
+  document.getElementById('m-profile').classList.toggle('on', m === 'profile');
+  document.getElementById('btn-upload').classList.toggle('visible', m === 'image');
+
+  q.value = modeInputs[m] || '';
+  q.classList.toggle('filled', Boolean(q.value.trim()));
+
+  if (m === 'video') {
+    q.placeholder = 'Pega el link o ID de un video de YouTube…';
+    document.getElementById('go').textContent = 'Ubicar en el mapa';
+  } else if (m === 'image') {
+    q.placeholder = 'Pega el link (URL) de cualquier imagen o arrastra un archivo aquí…';
+    document.getElementById('go').textContent = 'Ubicar imagen';
+  } else if (m === 'concept') {
+    q.placeholder = 'Escribe una palabra o concepto (ej. symphony, porsche, rubik, jazz)…';
+    document.getElementById('go').textContent = 'Explorar concepto';
+  } else {
+    q.placeholder = 'Pega el link de un canal (@handle, URL de canal o playlist pública)…';
+    document.getElementById('go').textContent = 'Analizar perfil';
+  }
+}
+document.getElementById('m-video').onclick = () => setMode('video');
+document.getElementById('m-image').onclick = () => {
+  setMode('image');
+  if (currentRepresentation !== 'image') switchRepresentation('image');
+};
+document.getElementById('m-concept').onclick = () => setMode('concept');
+document.getElementById('m-profile').onclick = () => setMode('profile');
+document.getElementById('go').onclick = () => run(mode);
+q.addEventListener('keydown', e => { if (e.key === 'Enter') run(mode); });
+
+// Soporte de subida y Drag & Drop de imágenes (en memoria, sin guardar en BDD)
+const imgFileInput = document.getElementById('img-file');
+const searchField = document.getElementById('search-field');
+document.getElementById('btn-upload').onclick = () => imgFileInput.click();
+
+function handleImageFile(file) {
+  if (!file || !file.type.startsWith('image/')) return;
+  if (file.size > 10 * 1024 * 1024) {
+    alert('La imagen supera el límite de 10 MB.');
+    return;
+  }
+  const reader = new FileReader();
+  reader.onload = ev => {
+    pendingImageDataUrl = ev.target.result;
+    pendingImageLabel = `[Archivo] ${file.name}`;
+    modeInputs.image = pendingImageLabel;
+    setMode('image', false);
+    runImageSearch({ image_data: pendingImageDataUrl, label: file.name });
+  };
+  reader.readAsDataURL(file);
+}
+
+imgFileInput.addEventListener('change', e => {
+  if (e.target.files && e.target.files[0]) {
+    handleImageFile(e.target.files[0]);
+    e.target.value = '';
+  }
+});
+
+[searchField, view].forEach(el => {
+  el.addEventListener('dragover', e => {
+    e.preventDefault();
+    searchField.classList.add('dragover');
+  });
+  el.addEventListener('dragleave', () => searchField.classList.remove('dragover'));
+  el.addEventListener('drop', e => {
+    e.preventDefault();
+    searchField.classList.remove('dragover');
+    const dt = e.dataTransfer;
+    if (!dt) return;
+    if (dt.files && dt.files[0]) {
+      handleImageFile(dt.files[0]);
+      return;
+    }
+    // Imagen arrastrada desde otra pestaña (Google Imágenes, una web cualquiera):
+    // el navegador no entrega un archivo, solo la URL o el HTML del <img>.
+    const dropped = imageFromDrop(dt);
+    if (!dropped) {
+      alert('No se encontró una imagen en lo que arrastraste.');
+      return;
+    }
+    modeInputs.image = dropped.label;
+    setMode('image', false);
+    runImageSearch(dropped);
+  });
+});
+
+function imageFromDrop(dt) {
+  const uri = (dt.getData('text/uri-list') || dt.getData('text/plain') || '').split('\n')[0].trim();
+  // Google Imágenes enlaza a /imgres?imgurl=<original>: preferimos la imagen original.
+  try {
+    const original = new URL(uri).searchParams.get('imgurl');
+    if (original) return { image_url: original, label: original.split('/').pop().split('?')[0] };
+  } catch (_) {}
+  // Si no, el src del <img> arrastrado (puede ser http o una miniatura data:image en base64).
+  const html = dt.getData('text/html');
+  const src = html && new DOMParser().parseFromString(html, 'text/html').querySelector('img')?.getAttribute('src');
+  if (src && src.startsWith('data:image/')) return { image_data: src, label: 'Imagen arrastrada' };
+  if (src && /^https?:\/\//.test(src)) return { image_url: src, label: src.split('/').pop().split('?')[0] };
+  if (/^https?:\/\//.test(uri)) return { image_url: uri, label: uri.split('/').pop().split('?')[0] };
+  return null;
+}
+
+// Pantalla de carga
+const STEPS = {
+  video: [['Leyendo metadatos', 'API de YouTube'], ['Descargando miniatura', 'i.ytimg.com'], ['Codificando representación', 'EmbeddingGemma 2'], ['Proyectando en el mapa', 'UMAP 3D'], ['Buscando vecinos', 'k = 12']],
+  image: [['Leyendo imagen en memoria', 'sin guardar en BDD'], ['Normalizando a 320×180 RGB', '70 tokens visuales'], ['Embedding visual', 'EmbeddingGemma 2'], ['Ubicando en espacio visual', 'UMAP 3D (k = 12)']],
+  concept: [['Codificando concepto', 'EmbeddingGemma 2'], ['Calculando similitud coseno', 'espacio 768-d'], ['Delimitando región 3D', 'centroide UMAP'], ['Clasificando vecindario', 'kNN']],
+  profile: [['Resolviendo canal / playlist', 'API de YouTube'], ['Hidratando últimos videos', 'hasta 40 videos'], ['Embedding en lote', 'EmbeddingGemma 2'], ['Calculando centroide y burbuja', 'UMAP 3D']],
+};
+function loading(m, at = 2) {
+  const titles = { video: 'Ubicando video', concept: 'Ubicando concepto en el mapa', profile: 'Ubicando perfil' };
+  document.getElementById('loadcard').innerHTML = `
+    <h3>${titles[m] || 'Ubicando'}</h3>
+    <p class="sub">${q.value || ''}</p>
+    <ul class="steps">${(STEPS[m] || STEPS.video).map((s, k) => `<li class="${k < at ? 'done' : k === at ? 'now' : ''}"><i></i>${s[0]}<code>${s[1]}</code></li>`).join('')}</ul>
+    <div class="bar"><div style="width:${(at + 0.5) / (STEPS[m] || STEPS.video).length * 100}%"></div></div>`;
+  document.getElementById('loading').classList.add('on');
+}
+
+let currentVideoData = null;
+let currentTargetPos = null;
+let currentRelTab = 'nearest';
+let relationGroup = null;
+let relationPoints = null;
+let relationIds = [];
+let relationPointColors = [];
+let focusedNeighborId = null;
+let focusedNeighborRing = null;
+let focusedNeighborDot = null;
+
+function clearFocusRing() {
+  if (focusedNeighborRing && overlay) {
+    overlay.remove(focusedNeighborRing);
+  }
+  if (focusedNeighborDot && overlay) {
+    overlay.remove(focusedNeighborDot);
+  }
+  if (relationPoints && relationPoints.geometry && relationPoints.geometry.attributes.color) {
+    const colAttr = relationPoints.geometry.attributes.color;
+    for (let i = 0; i < relationPointColors.length; i++) {
+      const c = relationPointColors[i];
+      colAttr.setXYZ(i, c.r, c.g, c.b);
+    }
+    colAttr.needsUpdate = true;
+  }
+  focusedNeighborRing = null;
+  focusedNeighborDot = null;
+  focusedNeighborId = null;
+  document.querySelectorAll('.btn-focus').forEach(btn => {
+    btn.classList.remove('active');
+    btn.textContent = 'Centrar';
+  });
+}
+
+function clearResult() {
+  clearFocusRing();
+  currentVideoData = null;
+  currentTargetPos = null;
+  relationGroup = null;
+  relationPoints = null;
+  relationIds = [];
+  relationPointColors = [];
+  tip.style.display = 'none';
+  scene.remove(overlay); overlay = new THREE.Group(); scene.add(overlay);
+  base.material.opacity = 0.85;
+  document.getElementById('main').classList.remove('with-right');
+  document.getElementById('timeline').classList.remove('on');
+  resize();
+}
+
+function line(a, b, color, opacity) {
+  const g = new THREE.BufferGeometry().setFromPoints([a, b]);
+  return new THREE.Line(g, new THREE.LineBasicMaterial({ color, transparent: true, opacity }));
+}
+
+// Votos de los vecinos: por categoría de YouTube (los calcula el servidor) o, con
+// "Colorear por HDBSCAN", por el grupo de cada vecino. `vertical` guarda el nombre ganador.
+function computeKnnVotes(vid, neighbors) {
+  const byCluster = colorMode === 'cluster';
+  if (!byCluster && vid && vid.knn_votes && vid.knn_votes.vertical) return vid.knn_votes;
+  const counts = {};
+  let total = 0;
+  (neighbors || []).forEach(nb => {
+    const v = byCluster ? nb.cluster : nb.vertical;
+    if (v && v !== '(Sin categoría)') {
+      counts[v] = (counts[v] || 0) + 1;
+      total++;
+    }
+  });
+  const breakdown = Object.entries(counts)
+    .sort((a, b) => b[1] - a[1])
+    .map(([vertical, count]) => ({ vertical, count }));
+  return {
+    vertical: breakdown.length ? breakdown[0].vertical : null,
+    count: breakdown.length ? breakdown[0].count : 0,
+    total,
+    breakdown
+  };
+}
+
+// Etiquetas zero-shot: las calcula el servidor (vocabulario YT-8M + folksonomía).
+function inferClientZeroShot(item) {
+  return ((item && item.zero_shot_tags) || []).slice().sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
+}
+
+function renderRelationOverlay(targetPos, list, isFar) {
+  if (relationGroup) {
+    overlay.remove(relationGroup);
+  }
+  relationGroup = new THREE.Group();
+  relationPoints = null;
+  relationIds = [];
+  relationPointColors = [];
+  const lineOpacity = isFar ? 0.38 : 0.48;
+  const positions = [];
+
+  (list || []).forEach(item => {
+    if (item.projection) {
+      const np = coordToVector3(item.projection);
+      const heat = getHeatmapInfo(item.similarity, item.distance_3d, isFar);
+      positions.push(np);
+      relationIds.push(item.youtube_id);
+      relationPointColors.push(new THREE.Color(heat.hex));
+      relationGroup.add(line(targetPos, np, heat.hex, lineOpacity));
+    }
+  });
+
+  if (positions.length > 0) {
+    const g = new THREE.BufferGeometry();
+    const arr = new Float32Array(positions.length * 3);
+    const col = new Float32Array(positions.length * 3);
+    positions.forEach((p, i) => {
+      p.toArray(arr, i * 3);
+      relationPointColors[i].toArray(col, i * 3);
+    });
+    g.setAttribute('position', new THREE.BufferAttribute(arr, 3));
+    g.setAttribute('color', new THREE.BufferAttribute(col, 3));
+    const m = new THREE.PointsMaterial({ size: 0.34, map: DISC, vertexColors: true, transparent: true, opacity: 0.95, depthWrite: false });
+    relationPoints = new THREE.Points(g, m);
+    relationGroup.add(relationPoints);
+  }
+
+  overlay.add(relationGroup);
+}
+
+function selectVideoById(yid) {
+  if (!yid) return;
+  const url = `https://www.youtube.com/watch?v=${yid}`;
+  modeInputs.video = url;
+  setMode('video', false);
+  runRealVideo(url);
+}
+
+function selectConcept(conceptStr) {
+  if (!conceptStr) return;
+  modeInputs.concept = conceptStr;
+  setMode('concept', false);
+  runConcept(conceptStr);
+}
+
+function renderNeighborCards(list, isFar) {
+  return (list || []).map(nb => {
+    const nbYid = nb.youtube_id;
+    const nbUrl = `https://www.youtube.com/watch?v=${nbYid}`;
+    const nbThumb = nb.thumbnail_url || `https://i.ytimg.com/vi/${nbYid}/mqdefault.jpg`;
+    const nbVert = (colorMode === 'cluster' ? nb.cluster : nb.vertical) || '';
+    const nbCh = nb.channel_title || '';
+    const nbViews = nb.view_count != null ? `${nb.view_count.toLocaleString('es-CL')} vistas` : '';
+    const nbDur = nb.duration ? fmtDur(nb.duration).txt : '';
+    const nbSub = [nbViews, nbDur].filter(Boolean).join(' · ');
+    const heat = getHeatmapInfo(nb.similarity, nb.distance_3d, isFar);
+    const isFocused = focusedNeighborId === nbYid;
+    return `
+      <div class="nb-card ${isFar ? 'far-card' : ''}">
+        <a href="${nbUrl}" target="_blank" title="Abrir en YouTube">
+          <img src="${nbThumb}" alt="" onerror="this.src='https://i.ytimg.com/vi/${nbYid}/hqdefault.jpg'">
+        </a>
+        <div class="nb-info">
+          <a class="nb-title" href="${nbUrl}" target="_blank" title="${nb.title || nbYid}">${nb.title || nbYid}</a>
+          <div class="nb-meta">${nbCh}${nbCh && nbVert ? ' · ' : ''}${nbVert}</div>
+          ${nbSub ? `<div class="nb-meta">${nbSub}</div>` : ''}
+        </div>
+        <div class="nb-actions">
+          <code class="sim-badge" style="color:${heat.fg};background:${heat.bg};border-color:${heat.border}" title="Similitud coseno: ${heat.sim.toFixed(3)} · Distancia coseno (1 - sim): ${heat.dCos.toFixed(3)}">${heat.label}</code>
+          <div class="nb-btn-row">
+            <button class="btn-action" onclick="selectVideoById('${nbYid}')" title="Inspeccionar este video y sus vecinos">Explorar</button>
+            <button class="btn-action btn-focus ${isFocused ? 'active' : ''}" data-yid="${nbYid}" onclick="focusNeighbor('${nbYid}', [${(nb.projection || []).join(',')}], this)" title="Centrar o desmarcar en el mapa 3D">${isFocused ? 'Desmarcar ✕' : 'Centrar'}</button>
+          </div>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+function switchNeighborTab(tab) {
+  if (!currentVideoData || !currentTargetPos) return;
+  currentRelTab = tab;
+  clearFocusRing();
+
+  const isFar = tab === 'farthest';
+  const list = isFar ? currentVideoData._farthestList : (currentVideoData.neighbors || []);
+  const btnNear = document.getElementById('tab-near');
+  const btnFar = document.getElementById('tab-far');
+  const subhint = document.getElementById('nb-subhint');
+  const listEl = document.getElementById('nb-list');
+
+  if (btnNear) btnNear.className = !isFar ? 'on-near' : '';
+  if (btnFar) btnFar.className = isFar ? 'on-far' : '';
+  if (subhint) {
+    subhint.innerHTML = isFar
+      ? `<span>Menor similitud · fuera de la burbuja</span><span>d = 1 − sim</span>`
+      : `<span>Mayor similitud coseno (768-d)</span><span>d = 1 − sim</span>`;
+  }
+  if (listEl) {
+    listEl.innerHTML = renderNeighborCards(list, isFar);
+  }
+
+  renderRelationOverlay(currentTargetPos, list, isFar);
+  setCamera(currentTargetPos, isFar ? 28 : 16);
+}
+
+const HEATMAP_LEGEND_HTML = `
+  <div class="heat-legend" title="Escala de similitud coseno s (y distancia coseno d = 1 - s)">
+    <span><i style="background:#4ADE80"></i>&gt; 0.90</span>
+    <span><i style="background:#2EA043"></i>0.80–0.90</span>
+    <span><i style="background:#58A6FF"></i>0.70–0.80</span>
+    <span><i style="background:#E2A336"></i>0.60–0.70</span>
+    <span><i style="background:#E5534B"></i>&le; 0.60</span>
+  </div>
+`;
+
+function showRealVideoResult(data) {
+  clearResult();
+  base.material.opacity = 0.28;
+
+  const targetCoords = data.projection;
+  const targetPos = coordToVector3(targetCoords);
+  const vid = data.video || {};
+  const yid = vid.youtube_id;
+
+  currentVideoData = data;
+  currentRenderer = showRealVideoResult;
+  currentTargetPos = targetPos;
+  currentRelTab = 'nearest';
+  data._farthestList = data.farthest || [];
+
+  renderRelationOverlay(targetPos, data.neighbors || [], false);
+
+  // Punto del video buscado
+  const tg = new THREE.BufferGeometry();
+  tg.setAttribute('position', new THREE.BufferAttribute(new Float32Array([targetPos.x, targetPos.y, targetPos.z]), 3));
+  const tm = new THREE.PointsMaterial({ size: 0.46, map: DISC, color: 0xFFFFFF, transparent: true, opacity: 1, depthWrite: false });
+  overlay.add(new THREE.Points(tg, tm));
+
+  // Anillo indicador del video seleccionado
+  const r = new THREE.Sprite(new THREE.SpriteMaterial({ map: RING, color: 0x4DA3FF, depthTest: false }));
+  r.position.copy(targetPos);
+  r.scale.set(0.92, 0.92, 1);
+  overlay.add(r);
+
+  // Panel lateral derecho dividido en 3 Cards
+  const ytUrl = `https://www.youtube.com/watch?v=${yid}`;
+  const thumbUrl = vid.thumbnail_url || `https://i.ytimg.com/vi/${yid}/mqdefault.jpg`;
+  const knn = computeKnnVotes(vid, data.neighbors || []);
+  const zsTags = inferClientZeroShot(vid, data.neighbors || []);
+  const byCluster = colorMode === 'cluster';
+  const own = byCluster ? vid.cluster : vid.vertical;
+  const hasRealVert = Boolean(own && own !== '(Sin categoría)');
+  const primaryVert = hasRealVert ? own : (knn.vertical || 'Sin clasificar');
+  const source = byCluster ? 'HDBSCAN' : 'YT-8M';
+  const vertMethod = hasRealVert
+    ? (knn.vertical ? `${source} · kNN ${knn.count}/${knn.total}` : source)
+    : (knn.vertical ? `kNN · ${knn.count}/${knn.total} vecinos` : '');
+
+  const viewsStr = vid.view_count != null ? vid.view_count.toLocaleString('es-CL') : '—';
+  const likesStr = vid.like_count != null ? vid.like_count.toLocaleString('es-CL') : '—';
+  const durStr = vid.duration ? fmtDur(vid.duration).txt : '—';
+  const dateStr = vid.published_at ? vid.published_at.slice(0, 10) : '—';
+
+  const nearCount = (data.neighbors || []).length;
+  const farCount = (data._farthestList || []).length;
+
+  document.getElementById('right').innerHTML = `
+    <!-- COMPONENTE 1: Video, metadatos y extracto de descripción -->
+    <section class="panel-card">
+      <div class="vid">
+        <div class="cat-header">
+          <h4>1 · Video y metadatos</h4>
+          <span class="cat-method">${currentRepresentation === 'image' ? 'espacio imagen' : 'espacio texto'}</span>
+        </div>
+        <a class="vid-thumb-link" href="${ytUrl}" target="_blank" title="Abrir en YouTube">
+          <img src="${thumbUrl}" alt="" onerror="this.src='https://i.ytimg.com/vi/${yid}/hqdefault.jpg'">
+          <div class="play-overlay"><span>Abrir en YouTube ↗</span></div>
+        </a>
+        <a class="title-link" href="${ytUrl}" target="_blank" title="Abrir en YouTube">${vid.title || yid}</a>
+        <div class="channel-line">Canal: <strong>${vid.channel_title || 'Desconocido'}</strong></div>
+      </div>
+
+      <div class="meta-strip">
+        <div class="meta-item" title="Vistas">${ICONS.eye}<span>Vistas</span><b style="margin-left:auto">${viewsStr}</b></div>
+        <div class="meta-item" title="Me gusta">${ICONS.like}<span>Likes</span><b style="margin-left:auto">${likesStr}</b></div>
+        <div class="meta-item" title="Duración">${ICONS.clock}<span>Duración</span><b style="margin-left:auto">${durStr}</b></div>
+        <div class="meta-item" title="Fecha de publicación">${ICONS.calendar}<span>Fecha</span><b style="margin-left:auto">${dateStr}</b></div>
+      </div>
+
+      ${vid.description ? `
+        <div>
+          <h4 style="margin-bottom:5px">Extracto de descripción</h4>
+          <div class="desc-box">${vid.description}</div>
+        </div>
+      ` : ''}
+    </section>
+
+    <!-- COMPONENTE 2: Clasificación temática y conceptos asociados al Zero-Shot -->
+    <section class="panel-card">
+      <div class="cat-header">
+        <h4>2 · ${byCluster ? 'Grupo HDBSCAN' : 'Clasificación temática'}</h4>
+        <span class="cat-method">${vertMethod}</span>
+      </div>
+      <div class="cat-primary">
+        <i class="cat-dot"></i>
+        <span>${primaryVert}</span>
+      </div>
+      ${knn.breakdown && knn.breakdown.length ? `
+        <div class="knn-list">
+          ${knn.breakdown.slice(0, 4).map(b => {
+            const pct = Math.round((b.count / (knn.total || 1)) * 100);
+            return `
+              <div class="knn-row">
+                <span>${b.vertical}</span>
+                <div class="knn-bar"><i style="width:${pct}%"></i></div>
+                <code>${b.count}/${knn.total}</code>
+              </div>
+            `;
+          }).join('')}
+        </div>
+      ` : ''}
+
+      ${zsTags && zsTags.length ? `
+        <div class="card-divider"></div>
+        <div class="cat-header">
+          <h4>Conceptos asociados (Zero-Shot)</h4>
+          <span class="cat-method">clic para mapear</span>
+        </div>
+        <div class="tags-wrap">
+          ${zsTags.map(z => {
+            const h = getHeatmapInfo(z.score, null, false);
+            return `
+              <button class="tag-chip" onclick="selectConcept('${String(z.tag).replace(/'/g, "\\'")}')" title="Ubicar región del concepto «${z.tag}» en el mapa 3D">
+                <span>${z.tag}</span>
+                ${z.score != null ? `<small style="color:${h.fg}">${z.score.toFixed(2)}</small>` : ''}
+              </button>
+            `;
+          }).join('')}
+        </div>
+      ` : ''}
+    </section>
+
+    <!-- COMPONENTE 3: Relaciones en el espacio -->
+    <section class="panel-card">
+      <div class="cat-header">
+        <h4>3 · Relaciones en el espacio</h4>
+      </div>
+      ${HEATMAP_LEGEND_HTML}
+      <div class="nb-tabs">
+        <button id="tab-near" class="on-near" onclick="switchNeighborTab('nearest')">Más cercanos (${nearCount})</button>
+        <button id="tab-far" onclick="switchNeighborTab('farthest')">Más lejanos (${farCount})</button>
+      </div>
+      <div class="nb-subhint" id="nb-subhint">
+        <span>Mayor similitud coseno (768-d)</span><span>d = 1 − sim</span>
+      </div>
+      <div class="nb" id="nb-list">
+        ${renderNeighborCards(data.neighbors || [], false)}
+      </div>
+    </section>
+  `;
+  document.getElementById('main').classList.add('with-right');
+  resize();
+
+  return targetPos;
+}
+
+// Mostrar resultado de búsqueda de un concepto o palabra en el mapa 3D
+function showConceptResult(data) {
+  clearResult();
+  base.material.opacity = 0.24;
+
+  const targetCoords = data.projection;
+  const targetPos = coordToVector3(targetCoords);
+  const concept = data.concept || {};
+  const queryStr = concept.query || q.value.trim();
+
+  currentVideoData = data;
+  currentRenderer = showConceptResult;
+  currentTargetPos = targetPos;
+  currentRelTab = 'nearest';
+  data._farthestList = data.farthest || [];
+
+  renderRelationOverlay(targetPos, data.neighbors || [], false);
+
+  if (data.region_points && data.region_points.length) {
+    const regPos = data.region_points.map(pt => coordToVector3(pt));
+    const g = new THREE.BufferGeometry();
+    const arr = new Float32Array(regPos.length * 3);
+    regPos.forEach((p, i) => p.toArray(arr, i * 3));
+    g.setAttribute('position', new THREE.BufferAttribute(arr, 3));
+    const m = new THREE.PointsMaterial({ size: 0.28, map: DISC, color: 0x9D7FE8, transparent: true, opacity: 0.75, depthWrite: false });
+    overlay.add(new THREE.Points(g, m));
+  }
+
+  const tg = new THREE.BufferGeometry();
+  tg.setAttribute('position', new THREE.BufferAttribute(new Float32Array([targetPos.x, targetPos.y, targetPos.z]), 3));
+  const tm = new THREE.PointsMaterial({ size: 0.48, map: DISC, color: 0xFFFFFF, transparent: true, opacity: 1, depthWrite: false });
+  overlay.add(new THREE.Points(tg, tm));
+
+  const r = new THREE.Sprite(new THREE.SpriteMaterial({ map: RING, color: 0x4DA3FF, depthTest: false }));
+  r.position.copy(targetPos);
+  r.scale.set(1.15, 1.15, 1);
+  overlay.add(r);
+
+  addPinnedConcept(queryStr, targetPos);
+
+  const knn = computeKnnVotes(concept, data.neighbors || []);
+  const zsTags = inferClientZeroShot(concept, data.neighbors || []);
+  const nearCount = (data.neighbors || []).length;
+  const farCount = (data._farthestList || []).length;
+
+  document.getElementById('right').innerHTML = `
+    <section class="panel-card">
+      <div class="vid">
+        <h4>1 · Región semántica · Concepto</h4>
+        <div style="font:600 22px/1.2 'Newsreader', Georgia, serif;color:var(--text)">«${queryStr}»</div>
+        <div class="channel-line">Centroide ponderado sobre los videos más afines en el espacio de embeddings (etiqueta anclada al mapa 3D).</div>
+      </div>
+    </section>
+
+    <section class="panel-card">
+      <div class="cat-header">
+        <h4>2 · ${colorMode === 'cluster' ? 'Grupo HDBSCAN' : 'Clasificación temática'} (kNN)</h4>
+        <span class="cat-method">${knn.vertical ? `${knn.count}/${knn.total} videos` : ''}</span>
+      </div>
+      <div class="cat-primary">
+        <i class="cat-dot"></i>
+        <span>${(colorMode === 'cluster' && concept.cluster) || knn.vertical || 'Multicategoría'}</span>
+      </div>
+      ${knn.breakdown && knn.breakdown.length ? `
+        <div class="knn-list">
+          ${knn.breakdown.slice(0, 4).map(b => {
+            const pct = Math.round((b.count / (knn.total || 1)) * 100);
+            return `
+              <div class="knn-row">
+                <span>${b.vertical}</span>
+                <div class="knn-bar"><i style="width:${pct}%"></i></div>
+                <code>${b.count}/${knn.total}</code>
+              </div>
+            `;
+          }).join('')}
+        </div>
+      ` : ''}
+      ${zsTags && zsTags.length ? `
+        <div class="card-divider"></div>
+        <div class="cat-header">
+          <h4>Conceptos asociados (Zero-Shot)</h4>
+          <span class="cat-method">clic para explorar</span>
+        </div>
+        <div class="tags-wrap">
+          ${zsTags.map(z => {
+            const h = getHeatmapInfo(z.score, null, false);
+            return `
+              <button class="tag-chip" onclick="selectConcept('${String(z.tag).replace(/'/g, "\\'")}')">
+                <span>${z.tag}</span>
+                ${z.score != null ? `<small style="color:${h.fg}">${z.score.toFixed(2)}</small>` : ''}
+              </button>
+            `;
+          }).join('')}
+        </div>
+      ` : ''}
+    </section>
+
+    <section class="panel-card">
+      <div class="cat-header">
+        <h4>3 · Relaciones en el espacio</h4>
+      </div>
+      ${HEATMAP_LEGEND_HTML}
+      <div class="nb-tabs">
+        <button id="tab-near" class="on-near" onclick="switchNeighborTab('nearest')">Más cercanos (${nearCount})</button>
+        <button id="tab-far" onclick="switchNeighborTab('farthest')">Más lejanos (${farCount})</button>
+      </div>
+      <div class="nb-subhint" id="nb-subhint">
+        <span>Mayor afinidad con «${queryStr}»</span><span>d = 1 − sim</span>
+      </div>
+      <div class="nb" id="nb-list">
+        ${renderNeighborCards(data.neighbors || [], false)}
+      </div>
+    </section>
+  `;
+  document.getElementById('main').classList.add('with-right');
+  resize();
+
+  return targetPos;
+}
+
+function focusNeighbor(nbId, coords, btnEl) {
+  if (!coords || coords.length < 3) return;
+  if (focusedNeighborId === nbId) {
+    clearFocusRing();
+    if (currentTargetPos) {
+      setCamera(currentTargetPos, currentRelTab === 'farthest' ? 28 : 16);
+    }
+    return;
+  }
+  clearFocusRing();
+  const p = coordToVector3(coords);
+  setCamera(p, 12);
+
+  // Cambiar el color del propio punto para distinguirlo en clusters densos
+  const ringHex = 0xE2A336;
+  const idxInRel = relationIds.indexOf(nbId);
+  if (idxInRel >= 0 && relationPoints && relationPoints.geometry && relationPoints.geometry.attributes.color) {
+    const colAttr = relationPoints.geometry.attributes.color;
+    const fc = new THREE.Color(0xFFFFFF);
+    colAttr.setXYZ(idxInRel, fc.r, fc.g, fc.b);
+    colAttr.needsUpdate = true;
+  }
+
+  const dg = new THREE.BufferGeometry();
+  dg.setAttribute('position', new THREE.BufferAttribute(new Float32Array([p.x, p.y, p.z]), 3));
+  const dm = new THREE.PointsMaterial({ size: 0.42, map: DISC, color: ringHex, transparent: true, opacity: 1, depthTest: false, depthWrite: false });
+  focusedNeighborDot = new THREE.Points(dg, dm);
+  overlay.add(focusedNeighborDot);
+
+  const r = new THREE.Sprite(new THREE.SpriteMaterial({ map: RING, color: ringHex, depthTest: false }));
+  r.position.copy(p);
+  r.scale.set(0.86, 0.86, 1);
+  overlay.add(r);
+
+  focusedNeighborRing = r;
+  focusedNeighborId = nbId;
+  if (btnEl) {
+    btnEl.classList.add('active');
+    btnEl.textContent = 'Desmarcar ✕';
+  }
+}
+
+async function runConcept(query) {
+  clearResult();
+  loading('concept', 0);
+  let step = 0;
+  const timer = setInterval(() => {
+    if (step < 3) {
+      step++;
+      loading('concept', step);
+    }
+  }, 500);
+
+  try {
+    const res = await fetch(API_BASE + '/concepts', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ concept: query })
+    });
+    clearInterval(timer);
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || `Error del servidor (${res.status})`);
+    }
+    const data = await res.json();
+    document.getElementById('loading').classList.remove('on');
+    const targetPos = showConceptResult(data);
+    setCamera(targetPos, 18);
+  } catch (err) {
+    clearInterval(timer);
+    document.getElementById('loading').classList.remove('on');
+    alert('No se pudo ubicar el concepto:\n' + err.message);
+  }
+}
+
+async function runRealVideo(query) {
+  clearResult();
+  loading('video', 0);
+  const sub = document.getElementById('loadcard').querySelector('p.sub');
+  if (sub) sub.textContent = query;
+
+  let step = 0;
+  const timer = setInterval(() => {
+    if (step < 3) {
+      step++;
+      loading('video', step);
+      const s = document.getElementById('loadcard').querySelector('p.sub');
+      if (s) s.textContent = query;
+    }
+  }, 900);
+
+  try {
+    const res = await fetch(API_BASE + '/videos', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ video: query, representation: currentRepresentation })
+    });
+    clearInterval(timer);
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || `Error del servidor (${res.status})`);
+    }
+    const data = await res.json();
+    loading('video', 4);
+    setTimeout(() => {
+      document.getElementById('loading').classList.remove('on');
+      const targetPos = showRealVideoResult(data);
+      setCamera(targetPos, 16);
+    }, 300);
+  } catch (err) {
+    clearInterval(timer);
+    document.getElementById('loading').classList.remove('on');
+    alert('No se pudo ubicar el video:\n' + err.message);
+  }
+}
+
+function showExternalImageResult(data) {
+  clearResult();
+  base.material.opacity = 0.28;
+
+  const targetCoords = data.projection;
+  const targetPos = coordToVector3(targetCoords);
+  const ext = data.external_image || {};
+
+  currentVideoData = data;
+  currentRenderer = showExternalImageResult;
+  currentTargetPos = targetPos;
+  currentRelTab = 'nearest';
+  data._farthestList = data.farthest || [];
+
+  renderRelationOverlay(targetPos, data.neighbors || [], false);
+
+  const tg = new THREE.BufferGeometry();
+  tg.setAttribute('position', new THREE.BufferAttribute(new Float32Array([targetPos.x, targetPos.y, targetPos.z]), 3));
+  const tm = new THREE.PointsMaterial({ size: 0.48, map: DISC, color: 0xFFFFFF, transparent: true, opacity: 1, depthWrite: false });
+  overlay.add(new THREE.Points(tg, tm));
+
+  const r = new THREE.Sprite(new THREE.SpriteMaterial({ map: RING, color: 0x4DA3FF, depthTest: false }));
+  r.position.copy(targetPos);
+  r.scale.set(0.95, 0.95, 1);
+  overlay.add(r);
+
+  const knn = computeKnnVotes(ext, data.neighbors || []);
+  const zsTags = inferClientZeroShot(ext, data.neighbors || []);
+  const primaryVert = (colorMode === 'cluster' && ext.cluster) || knn.vertical || 'Sin clasificar';
+  const nearCount = (data.neighbors || []).length;
+  const farCount = (data._farthestList || []).length;
+
+  document.getElementById('right').innerHTML = `
+    <section class="panel-card">
+      <div class="vid">
+        <div class="cat-header">
+          <h4>1 · Imagen consultada</h4>
+          <span class="cat-method">efímera · no guardada en BDD</span>
+        </div>
+        ${ext.preview_url ? `
+          <div class="vid-thumb-link" style="aspect-ratio:16/9;overflow:hidden;border-radius:4px;border:1px solid var(--line)">
+            <img src="${ext.preview_url}" alt="" style="width:100%;height:100%;object-fit:cover;display:block">
+          </div>
+        ` : ''}
+        <div style="font:500 16px/1.3 'Newsreader', Georgia, serif;color:var(--text)">${ext.label || 'Imagen externa'}</div>
+        <div class="channel-line">Proyectada en el espacio visual (EmbeddingGemma 2 · 70 tokens) sin persistencia en base de datos.</div>
+      </div>
+    </section>
+
+    <section class="panel-card">
+      <div class="cat-header">
+        <h4>2 · ${colorMode === 'cluster' ? 'Grupo HDBSCAN' : 'Clasificación visual'} (kNN)</h4>
+        <span class="cat-method">${knn.vertical ? `kNN · ${knn.count}/${knn.total} vecinos` : ''}</span>
+      </div>
+      <div class="cat-primary">
+        <i class="cat-dot"></i>
+        <span>${primaryVert}</span>
+      </div>
+      ${knn.breakdown && knn.breakdown.length ? `
+        <div class="knn-list">
+          ${knn.breakdown.slice(0, 4).map(b => {
+            const pct = Math.round((b.count / (knn.total || 1)) * 100);
+            return `
+              <div class="knn-row">
+                <span>${b.vertical}</span>
+                <div class="knn-bar"><i style="width:${pct}%"></i></div>
+                <code>${b.count}/${knn.total}</code>
+              </div>
+            `;
+          }).join('')}
+        </div>
+      ` : ''}
+      ${zsTags && zsTags.length ? `
+        <div class="card-divider"></div>
+        <div class="cat-header">
+          <h4>Conceptos visuales (Zero-Shot)</h4>
+          <span class="cat-method">clic para mapear</span>
+        </div>
+        <div class="tags-wrap">
+          ${zsTags.map(z => {
+            const h = getHeatmapInfo(z.score, null, false);
+            return `
+              <button class="tag-chip" onclick="selectConcept('${String(z.tag).replace(/'/g, "\\'")}')">
+                <span>${z.tag}</span>
+                ${z.score != null ? `<small style="color:${h.fg}">${z.score.toFixed(2)}</small>` : ''}
+              </button>
+            `;
+          }).join('')}
+        </div>
+      ` : ''}
+    </section>
+
+    <section class="panel-card">
+      <div class="cat-header">
+        <h4>3 · Relaciones en el espacio visual</h4>
+      </div>
+      ${HEATMAP_LEGEND_HTML}
+      <div class="nb-tabs">
+        <button id="tab-near" class="on-near" onclick="switchNeighborTab('nearest')">Más cercanos (${nearCount})</button>
+        <button id="tab-far" onclick="switchNeighborTab('farthest')">Más lejanos (${farCount})</button>
+      </div>
+      <div class="nb-subhint" id="nb-subhint">
+        <span>Miniaturas más similares</span><span>d = 1 − sim</span>
+      </div>
+      <div class="nb" id="nb-list">
+        ${renderNeighborCards(data.neighbors || [], false)}
+      </div>
+    </section>
+  `;
+  document.getElementById('main').classList.add('with-right');
+  resize();
+  return targetPos;
+}
+
+async function runImageSearch(payload) {
+  if (currentRepresentation !== 'image') {
+    await switchRepresentation('image');
+  }
+  clearResult();
+  loading('image', 0);
+  let step = 0;
+  const timer = setInterval(() => {
+    if (step < 3) {
+      step++;
+      loading('image', step);
+    }
+  }, 550);
+
+  try {
+    const res = await fetch(API_BASE + '/images', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    clearInterval(timer);
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || `Error del servidor (${res.status})`);
+    }
+    const data = await res.json();
+    document.getElementById('loading').classList.remove('on');
+    const targetPos = showExternalImageResult(data);
+    setCamera(targetPos, 16);
+  } catch (err) {
+    clearInterval(timer);
+    document.getElementById('loading').classList.remove('on');
+    alert('No se pudo procesar la imagen:\n' + err.message);
+  }
+}
+
+function showRealProfileResult(data) {
+  clearResult();
+  base.material.opacity = 0.25;
+
+  const targetCoords = data.projection;
+  const targetPos = coordToVector3(targetCoords);
+  const prof = data.profile || {};
+
+  currentVideoData = data;
+  currentRenderer = showRealProfileResult;
+  currentTargetPos = targetPos;
+  currentRelTab = 'nearest';
+  data._farthestList = data.farthest || [];
+
+  renderRelationOverlay(targetPos, data.neighbors || [], false);
+
+  // Nube de los videos del propio perfil
+  if (data.profile_videos && data.profile_videos.length) {
+    const pPts = data.profile_videos.map(v => coordToVector3(v.projection));
+    pPts.forEach(p => overlay.add(line(targetPos, p, 0x4DA3FF, 0.22)));
+    const g = new THREE.BufferGeometry();
+    const arr = new Float32Array(pPts.length * 3);
+    pPts.forEach((p, i) => p.toArray(arr, i * 3));
+    g.setAttribute('position', new THREE.BufferAttribute(arr, 3));
+    const m = new THREE.PointsMaterial({ size: 0.34, map: DISC, color: 0x4DA3FF, transparent: true, opacity: 0.9, depthWrite: false });
+    overlay.add(new THREE.Points(g, m));
+  }
+
+  const r = new THREE.Sprite(new THREE.SpriteMaterial({ map: RING, color: 0x4DA3FF, depthTest: false }));
+  r.position.copy(targetPos);
+  r.scale.set(1.4, 1.4, 1);
+  overlay.add(r);
+
+  const knn = computeKnnVotes(prof, colorMode === 'cluster' ? (data.profile_videos || []) : (data.neighbors || []));
+  const zsTags = inferClientZeroShot(prof, data.neighbors || []);
+  const nVids = prof.analyzed_videos || (data.profile_videos || []).length || 1;
+  const nearCount = (data.neighbors || []).length;
+  const farCount = (data._farthestList || []).length;
+
+  document.getElementById('right').innerHTML = `
+    <section class="panel-card">
+      <div class="vid">
+        <div class="cat-header">
+          <h4>1 · Perfil / Canal analizado</h4>
+          <span class="cat-method">${nVids} videos</span>
+        </div>
+        <div style="font:600 20px/1.25 'Newsreader', Georgia, serif;color:var(--text)">${prof.title || prof.query || 'Perfil'}</div>
+        ${prof.subscriber_count != null ? `<div class="channel-line">Suscriptores: <strong>${prof.subscriber_count.toLocaleString('es-CL')}</strong> · Cohesión: <strong>${(prof.cohesion || 0.82).toFixed(2)}</strong></div>` : ''}
+        ${prof.description ? `<div class="desc-box">${prof.description}</div>` : ''}
+      </div>
+    </section>
+
+    <section class="panel-card">
+      <div class="cat-header">
+        <h4>2 · Distribución de tu burbuja</h4>
+        <span class="cat-method">${(knn.breakdown || []).length} de ${colorMode === 'cluster' ? `${D.cats.length} grupos` : `${prof.total_categories || D.cats.length} categorías`}</span>
+      </div>
+      ${knn.breakdown && knn.breakdown.length ? `
+        <div class="knn-list">
+          ${knn.breakdown.slice(0, 6).map(b => {
+            const pct = Math.round((b.count / (knn.total || nVids)) * 100);
+            return `
+              <div class="knn-row">
+                <span>${b.vertical}</span>
+                <div class="knn-bar"><i style="width:${pct}%"></i></div>
+                <code>${b.count}/${knn.total || nVids}</code>
+              </div>
+            `;
+          }).join('')}
+        </div>
+      ` : ''}
+      ${zsTags && zsTags.length ? `
+        <div class="card-divider"></div>
+        <div class="cat-header">
+          <h4>Conceptos dominantes (Zero-Shot)</h4>
+          <span class="cat-method">clic para mapear</span>
+        </div>
+        <div class="tags-wrap">
+          ${zsTags.map(z => {
+            const h = getHeatmapInfo(z.score, null, false);
+            return `
+              <button class="tag-chip" onclick="selectConcept('${String(z.tag).replace(/'/g, "\\'")}')">
+                <span>${z.tag}</span>
+                ${z.score != null ? `<small style="color:${h.fg}">${z.score.toFixed(2)}</small>` : ''}
+              </button>
+            `;
+          }).join('')}
+        </div>
+      ` : ''}
+    </section>
+
+    <section class="panel-card">
+      <div class="cat-header">
+        <h4>3 · Videos afines vs. Fuera de tu burbuja</h4>
+      </div>
+      ${HEATMAP_LEGEND_HTML}
+      <div class="nb-tabs">
+        <button id="tab-near" class="on-near" onclick="switchNeighborTab('nearest')">En tu burbuja (${nearCount})</button>
+        <button id="tab-far" onclick="switchNeighborTab('farthest')">Fuera de burbuja (${farCount})</button>
+      </div>
+      <div class="nb-subhint" id="nb-subhint">
+        <span>Mayor afinidad con el centroide del perfil</span><span>d = 1 − sim</span>
+      </div>
+      <div class="nb" id="nb-list">
+        ${renderNeighborCards(data.neighbors || [], false)}
+      </div>
+    </section>
+  `;
+  document.getElementById('main').classList.add('with-right');
+  resize();
+  return targetPos;
+}
+
+async function runRealProfile(query) {
+  clearResult();
+  loading('profile', 0);
+  let step = 0;
+  const timer = setInterval(() => {
+    if (step < 3) {
+      step++;
+      loading('profile', step);
+    }
+  }, 600);
+
+  try {
+    const res = await fetch(API_BASE + '/profiles', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ profile: query })
+    });
+    clearInterval(timer);
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || `Error del servidor (${res.status})`);
+    }
+    const data = await res.json();
+    document.getElementById('loading').classList.remove('on');
+    const targetPos = showRealProfileResult(data);
+    setCamera(targetPos, 24);
+  } catch (err) {
+    clearInterval(timer);
+    document.getElementById('loading').classList.remove('on');
+    alert('No se pudo analizar el perfil:\n' + err.message);
+  }
+}
+
+function isLikelyVideoInput(val) {
+  const s = val.trim();
+  if (/^[A-Za-z0-9_-]{11}$/.test(s)) return true;
+  if (/youtu\.be\/|youtube\.com\//i.test(s)) return true;
+  return false;
+}
+
+function isLikelyImageUrl(val) {
+  const s = val.trim();
+  if (s.startsWith('data:image/')) return true;
+  if (/\.(jpe?g|png|webp|gif|avif)(\?.*)?$/i.test(s)) return true;
+  if (/i\.ytimg\.com\/|images\.unsplash\.com\/|imgur\.com\/|wikimedia\.org\//i.test(s)) return true;
+  return false;
+}
+
+function run(m) {
+  if (m === 'profile') {
+    const query = q.value.trim();
+    if (!query) return;
+    modeInputs.profile = query;
+    q.classList.add('filled');
+    runRealProfile(query);
+    return;
+  }
+
+  if (m === 'image') {
+    if (pendingImageDataUrl && q.value === pendingImageLabel) {
+      runImageSearch({ image_data: pendingImageDataUrl, label: pendingImageLabel });
+      return;
+    }
+    const query = q.value.trim();
+    if (!query) return;
+    modeInputs.image = query;
+    q.classList.add('filled');
+    runImageSearch({ image_url: query, label: query });
+    return;
+  }
+
+  if (m === 'concept') {
+    const query = q.value.trim() || 'symphony';
+    q.value = query;
+    modeInputs.concept = query;
+    q.classList.add('filled');
+    runConcept(query);
+    return;
+  }
+
+  const query = q.value.trim();
+  if (!query) return;
+  q.value = query;
+  modeInputs.video = query;
+  q.classList.add('filled');
+  if (isLikelyImageUrl(query)) {
+    modeInputs.image = query;
+    setMode('image', false);
+    runImageSearch({ image_url: query, label: query });
+    return;
+  }
+  if (!isLikelyVideoInput(query)) {
+    modeInputs.concept = query;
+    setMode('concept', false);
+    runConcept(query);
+    return;
+  }
+  runRealVideo(query);
+}
+
+function resize() {
+  const r = view.getBoundingClientRect();
+  renderer.setSize(r.width, r.height); camera.aspect = r.width / r.height; camera.updateProjectionMatrix();
+  updateLandmarksPositions();
+}
+function start() {
+  resize();
+  clearResult(); document.getElementById('loading').classList.remove('on'); tip.style.display = 'none';
+  setMode('video', false);
+  setCamera(new THREE.Vector3(), 30);
+  controls.autoRotate = false;
+}
+window.addEventListener('resize', resize);
+start();
+(function loop() {
+  requestAnimationFrame(loop);
+  controls.update();
+  renderer.render(scene, camera);
+  updateLandmarksPositions();
+})();
+</script>
+</body>
+</html>
