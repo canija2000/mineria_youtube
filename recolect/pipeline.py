@@ -174,6 +174,10 @@ def run(limit=None, force=False):
     _stage("11/11 Mapa 3D (UMAP) para el servidor",
            force or text_recomputed or current_info(out) is None,
            lambda: build_map(out))
+    _stage("11/11 Mapa 3D (UMAP) de miniaturas",
+           force or not image_path.exists() or current_info(out, "image") is None
+           or image_path.stat().st_mtime > (out / "maps_image" / "current.json").stat().st_mtime,
+           lambda: build_map(out, representation="image"))
 
     manifest = {
         "limit": limit,

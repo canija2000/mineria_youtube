@@ -239,7 +239,7 @@ def analyze_profile(payload: ProfileRequest):
         raise HTTPException(status_code=502, detail=f"No se pudo analizar el perfil: {exc}") from exc
 
 
-mockup_dir = Path("webapp_mockup")
-if mockup_dir.is_dir():
-    app.mount("/", StaticFiles(directory=str(mockup_dir), html=True), name="frontend")
+web_dir = Path("web")
+if web_dir.is_dir():
+    app.mount("/", StaticFiles(directory=str(web_dir), html=True), name="frontend")
 

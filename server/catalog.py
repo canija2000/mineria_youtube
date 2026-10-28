@@ -82,10 +82,12 @@ class VideoCatalog:
         self.image_positions: dict[str, int] = {}
         self.image_vectors: np.ndarray | None = None
         self.image_coordinates: np.ndarray | None = None
+        self.image_meta: dict = {}
         self._load_image_space()
 
         self.map_meta: dict = {}
         self._map_cache = None
+        self._image_map_cache = None
         self._load_map()
 
     def _load_verticals(self, metadata: pd.DataFrame) -> dict[str, str]:
@@ -194,20 +196,20 @@ class VideoCatalog:
     # ---------- carga del mapa y armado del catálogo ----------
 
     def _load_image_space(self) -> None:
-        """Carga el espacio de embeddings de imagen y su proyección UMAP 3D (muestra multimodal)."""
-        ms_path = self.data_dir / "multimodal_sample.parquet"
-        if not ms_path.exists():
-            ms_path = Path("data") / "multimodal_sample.parquet"
-        if not ms_path.exists():
+        """Carga los vectores de miniatura de los videos base y su mapa UMAP 3D (`remap.py --rep image`)."""
+        if current_info(self.data_dir, "image") is None:
+            print("[catálogo] sin mapa de miniaturas; calcúlalo con: python3 remap.py --rep image", flush=True)
             return
-        cols = ["youtube_id", "emb_image", "imagen_x", "imagen_y", "imagen_z"]
-        ms = pd.read_parquet(ms_path, columns=cols).dropna(subset=["youtube_id"]).drop_duplicates("youtube_id")
-        self.image_ids = ms["youtube_id"].astype(str).tolist()
+        meta, coords, _reducer = load_current(self.data_dir, "image")
+        ids, vectors = load_base_vectors(self.data_dir, "image")
+        coords = coords.set_index("youtube_id").reindex(ids)
+        keep = coords["x"].notna().to_numpy()
+        self.image_meta = meta
+        self.image_ids = [video_id for video_id, ok in zip(ids, keep) if ok]
         self.image_positions = {yid: i for i, yid in enumerate(self.image_ids)}
-        vecs = np.stack(ms["emb_image"].to_numpy()).astype(np.float32)
-        norms = np.linalg.norm(vecs, axis=1, keepdims=True)
-        self.image_vectors = vecs / np.clip(norms, 1e-12, None)
-        self.image_coordinates = ms[["imagen_x", "imagen_y", "imagen_z"]].to_numpy(dtype=np.float32)
+        self.image_vectors = vectors[keep]
+        self.image_coordinates = coords.loc[keep, ["x", "y", "z"]].to_numpy(dtype=np.float32)
+        print(f"[catálogo] mapa de miniaturas {meta['version']}: {len(self.image_ids):,} videos", flush=True)
 
     def _load_map(self):
         meta, coords, reducer = load_current(self.data_dir)
@@ -251,6 +253,11 @@ class VideoCatalog:
 
     def refresh_map(self):
         """Si `remap.py` publicó un mapa nuevo o entraron lotes en SQLite (`--modern`), actualiza el catálogo."""
+        latest_image = current_info(self.data_dir, "image")
+        if latest_image and latest_image["version"] != self.image_meta.get("version"):
+            with self.lock:
+                self._load_image_space()
+                self._image_map_cache = None
         latest = current_info(self.data_dir)
         store_count = self.store.count()
         if (latest and latest["version"] != self.map_meta["version"]) or (store_count != self._last_store_count):
@@ -284,6 +291,8 @@ class VideoCatalog:
         """
         with self.lock:
             if representation == "image" and self.image_ids and self.image_coordinates is not None:
+                if self._image_map_cache and self._image_map_cache[0] == self.image_meta["version"]:
+                    return self._image_map_cache[1]
                 vertical_counts = Counter(
                     self.verticals.get(i) for i in self.image_ids
                     if self.verticals.get(i) and self.verticals.get(i) != "(Unknown)"
@@ -293,8 +302,8 @@ class VideoCatalog:
                     vertical_names.append("(Unknown)")
                 vertical_index = {name: i for i, name in enumerate(vertical_names)}
                 coords = np.round(self.image_coordinates.astype(float), 4)
-                return {
-                    "map_version": f"{self.map_meta.get('version', 'v1')}-image",
+                payload = {
+                    "map_version": self.image_meta["version"],
                     "representation": "image",
                     "videos": len(self.image_ids),
                     "verticals": vertical_names,
@@ -311,6 +320,8 @@ class VideoCatalog:
                         "in_map": [True] * len(self.image_ids),
                     },
                 }
+                self._image_map_cache = (self.image_meta["version"], payload)
+                return payload
 
             key = (self.map_meta["version"], len(self.ids))
             if self._map_cache and self._map_cache[0] == key:
@@ -511,7 +522,7 @@ class VideoCatalog:
             }
 
             return {
-                "map_version": f"{self.map_meta.get('version', 'v1')}-image",
+                "map_version": self.image_meta.get("version"),
                 "representation": "image",
                 "video": {
                     "youtube_id": video_id,
@@ -686,7 +697,7 @@ class VideoCatalog:
             }
 
             return {
-                "map_version": f"{self.map_meta.get('version', 'v1')}-image",
+                "map_version": self.image_meta.get("version"),
                 "representation": "image",
                 "external_image": {
                     "label": label,

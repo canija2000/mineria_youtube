@@ -566,14 +566,14 @@
       </div>
       <button class="go" id="go">Ubicar en el mapa</button>
     </div>
-    <div class="meta">36.041 videos · EmbeddingGemma 2 · UMAP 3D</div>
+    <div class="meta">cargando mapa…</div>
   </header>
   <main id="main">
     <aside class="left">
       <div><h4>Representación</h4></div>
       <div class="proj">
-        <label id="rep-text" class="on" onclick="switchRepresentation('text')"><span></span>Texto<small id="count-text">36,0k</small></label>
-        <label id="rep-image" onclick="switchRepresentation('image')"><span></span>Imagen<small id="count-image">5,0k</small></label>
+        <label id="rep-text" class="on" onclick="switchRepresentation('text')"><span></span>Texto<small id="count-text">—</small></label>
+        <label id="rep-image" onclick="switchRepresentation('image')"><span></span>Imagen<small id="count-image">—</small></label>
         <label class="disabled" title="Próximamente"><span></span>Fusión temprana</label>
         <label class="disabled" title="Próximamente"><span></span>Fusión tardía</label>
       </div>
@@ -593,15 +593,15 @@
 </div>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
-<script src="data.js"></script>
 <script>
 const API_BASE = (window.location.origin === 'null' || window.location.protocol === 'file:') ? 'http://127.0.0.1:8000' : '';
-let D = window.DATA || { cats: [], ids: [], titles: [], cat: [], pts: [], info: {} };
+// D se llena con la respuesta de /map (applyMapPayload)
+let D = { cats: [], ids: [], titles: [], cat: [], pts: [], info: {} };
 let currentRepresentation = 'text';
 const PALETTE = ['#4DA3FF', '#E2A336', '#D96B62', '#68B87A', '#9D7FE8', '#D97EB0', '#54B8B1', '#E08258', '#869CEB', '#C4BE62'];
 const OTHER = '#4B5563';
 const colorOf = c => c < PALETTE.length ? PALETTE[c] : OTHER;
-const thumb = id => id === D.demo ? 'frames/' + id + '_thumb.jpg' : 'https://i.ytimg.com/vi/' + id + '/mqdefault.jpg';
+const thumb = id => 'https://i.ytimg.com/vi/' + id + '/mqdefault.jpg';
 let idx = Object.fromEntries((D.ids || []).map((y, i) => [y, i]));
 const fmtDur = d => {
   const m = /PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/.exec(d || '') || [];
@@ -787,34 +787,13 @@ function applyMapPayload(data, rep) {
 }
 
 async function loadServerMap(rep = 'text') {
+  const metaTag = document.querySelector('.meta');
   try {
-    let res = await fetch(`${API_BASE}/map?rep=${rep}`);
-    let data = res.ok ? await res.json() : null;
-    if (rep === 'text') {
-      try {
-        const liveRes = await fetch('live_map.json');
-        if (liveRes.ok) {
-          const liveData = await liveRes.json();
-          if (!data || !data.points || (liveData.points && liveData.points.youtube_id.length > data.points.youtube_id.length)) {
-            data = liveData;
-          }
-        }
-      } catch (_) {}
-    } else if (rep === 'image' && (!data || data.representation !== 'image')) {
-      const fallbackRes = await fetch('image_map.json');
-      if (fallbackRes.ok) data = await fallbackRes.json();
-    }
-    if (!data || !data.points || !data.points.youtube_id) return;
-    applyMapPayload(data, rep);
+    const res = await fetch(`${API_BASE}/map?rep=${rep}`);
+    if (!res.ok) throw new Error(`el servidor respondió ${res.status}`);
+    applyMapPayload(await res.json(), rep);
   } catch (e) {
-    const fallbackFile = rep === 'image' ? 'image_map.json' : 'live_map.json';
-    try {
-      const fallbackRes = await fetch(fallbackFile);
-      if (fallbackRes.ok) {
-        const data = await fallbackRes.json();
-        applyMapPayload(data, rep);
-      }
-    } catch (_) {}
+    if (metaTag) metaTag.textContent = `No se pudo cargar el mapa (${e.message}). ¿Está corriendo el servidor?`;
   }
 }
 loadServerMap('text');
@@ -1130,102 +1109,9 @@ function computeKnnVotes(vid, neighbors) {
   };
 }
 
-function inferClientZeroShot(vid, neighbors) {
-  if (vid && vid.zero_shot_tags && vid.zero_shot_tags.length) return vid.zero_shot_tags;
-  const yid = vid ? vid.youtube_id : null;
-  if (yid && D.info && D.info[yid] && D.info[yid].zs && D.info[yid].zs.length) {
-    return D.info[yid].zs.map((t, i) => ({ tag: t, score: Math.max(0.74, 0.91 - i * 0.03) }));
-  }
-  // Si los vecinos tienen etiquetas Zero-Shot precargadas (ej. en image_map.json), votar entre ellas
-  const nbZsCounts = {};
-  (neighbors || []).forEach((nb, idx) => {
-    const inf = (D.info && D.info[nb.youtube_id]) || {};
-    if (inf.zs && inf.zs.length) {
-      inf.zs.forEach((t, pos) => {
-        nbZsCounts[t] = (nbZsCounts[t] || 0) + Math.max(0.2, 1.0 - idx * 0.06 - pos * 0.1);
-      });
-    }
-  });
-  const votedZs = Object.entries(nbZsCounts).sort((a, b) => b[1] - a[1]);
-  if (votedZs.length >= 3) {
-    return votedZs.slice(0, 6).map(([tag], i) => ({
-      tag,
-      score: Math.max(0.72, 0.91 - i * 0.03)
-    }));
-  }
-  const stop = new Set([
-    'the', 'and', 'for', 'with', 'from', 'that', 'this', 'your', 'you', 'how', 'una', 'con', 'para', 'los', 'las',
-    'del', 'por', 'como', 'más', 'pero', 'sus', 'este', 'esta', 'son', 'video', 'official', 'full', 'live', 'new',
-    'best', 'top', 'part', 'episode', 'feat', 'ft', 'hd', 'hq', '1080p', '720p', '2010', '2011', '2012', '2013',
-    '2014', '2015', '2016', '2023', '2024'
-  ]);
-  const counts = {};
-  const docs = [vid ? vid.title : '', ...(neighbors || []).map(n => n.title || '')];
-  docs.forEach((text, dIdx) => {
-    const weight = dIdx === 0 ? 1.5 : 1.0;
-    const words = String(text || '').toLowerCase().replace(/[^\p{L}\p{N}\s]/gu, ' ').split(/\s+/);
-    const seenInDoc = new Set();
-    words.forEach(w => {
-      if (w.length >= 4 && !stop.has(w) && !/^\d+$/.test(w) && !seenInDoc.has(w)) {
-        seenInDoc.add(w);
-        counts[w] = (counts[w] || 0) + weight;
-      }
-    });
-  });
-  return Object.entries(counts)
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 7)
-    .map(([tag, c], idx) => ({
-      tag,
-      score: Math.min(0.95, Math.max(0.72, 0.91 - idx * 0.025 + (c > 2 ? 0.03 : 0)))
-    }));
-}
-
-function computeFarthestFallback(targetCoords, targetId, k = 12) {
-  if (!D.ids || !D.pts || !D.pts.length) return [];
-  const dists = D.pts.map((pt, i) => {
-    if (D.ids[i] === targetId) return { i, d: -1 };
-    const d = Math.hypot(pt[0] - targetCoords[0], pt[1] - targetCoords[1], pt[2] - targetCoords[2]);
-    return { i, d };
-  });
-  dists.sort((a, b) => b.d - a.d);
-  const pool = dists.slice(0, 400);
-  const picked = [];
-  const seenVerts = new Set();
-  for (const item of pool) {
-    const yid = D.ids[item.i];
-    const inf = (D.info && D.info[yid]) || {};
-    const vert = inf.c || (D.cats && D.cat ? D.cats[D.cat[item.i]] : '');
-    if (vert && !seenVerts.has(vert)) {
-      seenVerts.add(vert);
-      picked.push(item);
-      if (picked.length >= k) break;
-    }
-  }
-  if (picked.length < k) {
-    const used = new Set(picked.map(x => x.i));
-    for (const item of pool) {
-      if (!used.has(item.i)) {
-        picked.push(item);
-        if (picked.length >= k) break;
-      }
-    }
-  }
-  return picked.map(({ i, d }) => {
-    const yid = D.ids[i];
-    const inf = (D.info && D.info[yid]) || {};
-    return {
-      youtube_id: yid,
-      title: D.titles[i] || inf.t || yid,
-      channel_title: inf.ch || '',
-      vertical: inf.c || (D.cats && D.cat ? D.cats[D.cat[i]] : ''),
-      view_count: inf.v != null ? inf.v : null,
-      duration: inf.d || null,
-      similarity: null,
-      distance_3d: d,
-      projection: D.pts[i]
-    };
-  });
+// Etiquetas zero-shot: las calcula el servidor (vocabulario YT-8M + folksonomía).
+function inferClientZeroShot(item) {
+  return (item && item.zero_shot_tags) || [];
 }
 
 function renderRelationOverlay(targetPos, list, isFar) {
@@ -1366,9 +1252,7 @@ function showRealVideoResult(data) {
   currentVideoData = data;
   currentTargetPos = targetPos;
   currentRelTab = 'nearest';
-  data._farthestList = (data.farthest && data.farthest.length)
-    ? data.farthest
-    : computeFarthestFallback(targetCoords, yid, 12);
+  data._farthestList = data.farthest || [];
 
   renderRelationOverlay(targetPos, data.neighbors || [], false);
 
@@ -1516,9 +1400,7 @@ function showConceptResult(data) {
   currentVideoData = data;
   currentTargetPos = targetPos;
   currentRelTab = 'nearest';
-  data._farthestList = (data.farthest && data.farthest.length)
-    ? data.farthest
-    : computeFarthestFallback(targetCoords, null, 12);
+  data._farthestList = data.farthest || [];
 
   renderRelationOverlay(targetPos, data.neighbors || [], false);
 
@@ -1666,99 +1548,6 @@ function focusNeighbor(nbId, coords, btnEl) {
   }
 }
 
-function buildClientConceptFallback(query) {
-  const qNorm = query.trim().toLowerCase();
-  const tokens = qNorm.split(/\s+/).filter(Boolean);
-  const scored = [];
-  for (let i = 0; i < D.ids.length; i++) {
-    const yid = D.ids[i];
-    const inf = (D.info && D.info[yid]) || {};
-    const title = String(D.titles[i] || inf.t || '').toLowerCase();
-    const ch = String(inf.ch || '').toLowerCase();
-    const cat = String(inf.c || (D.cats && D.cat ? D.cats[D.cat[i]] : '')).toLowerCase();
-    let score = 0;
-    if (title.includes(qNorm)) score += 3.0;
-    if (cat.includes(qNorm)) score += 2.0;
-    if (ch.includes(qNorm)) score += 1.5;
-    tokens.forEach(tk => {
-      if (title.includes(tk)) score += 1.2;
-      if (cat.includes(tk)) score += 0.8;
-    });
-    if (score > 0) scored.push({ i, score });
-  }
-  scored.sort((a, b) => b.score - a.score);
-  const top = (scored.length ? scored.slice(0, 30) : Array.from({ length: 20 }, (_, i) => ({ i, score: 1 })));
-  const centroid = [0, 1, 2].map(k => top.slice(0, 15).reduce((acc, item) => acc + D.pts[item.i][k], 0) / Math.min(15, top.length));
-
-  const byDist = D.pts.map((pt, i) => ({
-    i,
-    d: Math.hypot(pt[0] - centroid[0], pt[1] - centroid[1], pt[2] - centroid[2]),
-    lexical: (scored.find(s => s.i === i)?.score || 0)
-  }));
-  byDist.sort((a, b) => (b.lexical > 0 ? 1 : 0) - (a.lexical > 0 ? 1 : 0) || a.d - b.d);
-  const nearestIdx = byDist.slice(0, 12);
-
-  const neighbors = nearestIdx.map((item, rank) => {
-    const yid = D.ids[item.i];
-    const inf = (D.info && D.info[yid]) || {};
-    return {
-      youtube_id: yid,
-      title: D.titles[item.i] || inf.t || yid,
-      channel_title: inf.ch || '',
-      vertical: inf.c || (D.cats && D.cat ? D.cats[D.cat[item.i]] : ''),
-      view_count: inf.v != null ? inf.v : null,
-      duration: inf.d || null,
-      similarity: Math.max(0.71, 0.93 - rank * 0.018),
-      projection: D.pts[item.i]
-    };
-  });
-
-  return {
-    concept: { query: query.trim() },
-    projection: centroid,
-    region_points: byDist.slice(0, 28).map(x => D.pts[x.i]),
-    neighbors,
-    farthest: computeFarthestFallback(centroid, null, 12)
-  };
-}
-
-function buildClientImageVideoFallback(baseVideoData) {
-  if (currentRepresentation !== 'image' || (baseVideoData && baseVideoData.representation === 'image')) {
-    return baseVideoData;
-  }
-  const vid = (baseVideoData && baseVideoData.video) || {};
-  const yid = vid.youtube_id;
-  let targetCoords = baseVideoData.projection;
-  if (idx[yid] !== undefined && D.pts[idx[yid]]) {
-    targetCoords = D.pts[idx[yid]];
-  }
-  const dists = D.pts.map((pt, i) => {
-    if (D.ids[i] === yid) return { i, d: Infinity };
-    const d = Math.hypot(pt[0] - targetCoords[0], pt[1] - targetCoords[1], pt[2] - targetCoords[2]);
-    return { i, d };
-  });
-  dists.sort((a, b) => a.d - b.d);
-  const neighbors = dists.slice(0, 12).map((item, rank) => {
-    const nbId = D.ids[item.i];
-    const inf = (D.info && D.info[nbId]) || {};
-    return {
-      youtube_id: nbId,
-      title: D.titles[item.i] || inf.t || nbId,
-      channel_title: inf.ch || '',
-      vertical: inf.c || (D.cats && D.cat ? D.cats[D.cat[item.i]] : ''),
-      similarity: Math.max(0.72, 0.92 - rank * 0.016),
-      projection: D.pts[item.i]
-    };
-  });
-  return {
-    ...baseVideoData,
-    representation: 'image',
-    projection: targetCoords,
-    neighbors,
-    farthest: computeFarthestFallback(targetCoords, yid, 12)
-  };
-}
-
 async function runConcept(query) {
   clearResult();
   loading('concept', 0);
@@ -1777,21 +1566,18 @@ async function runConcept(query) {
       body: JSON.stringify({ concept: query })
     });
     clearInterval(timer);
-    let data;
-    if (res.ok) {
-      data = await res.json();
-    } else {
-      data = buildClientConceptFallback(query);
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || `Error del servidor (${res.status})`);
     }
+    const data = await res.json();
     document.getElementById('loading').classList.remove('on');
     const targetPos = showConceptResult(data);
     setCamera(targetPos, 18);
   } catch (err) {
     clearInterval(timer);
     document.getElementById('loading').classList.remove('on');
-    const data = buildClientConceptFallback(query);
-    const targetPos = showConceptResult(data);
-    setCamera(targetPos, 18);
+    alert('No se pudo ubicar el concepto:\n' + err.message);
   }
 }
 
@@ -1822,10 +1608,7 @@ async function runRealVideo(query) {
       const err = await res.json().catch(() => ({}));
       throw new Error(err.detail || `Error del servidor (${res.status})`);
     }
-    let data = await res.json();
-    if (currentRepresentation === 'image') {
-      data = buildClientImageVideoFallback(data);
-    }
+    const data = await res.json();
     loading('video', 4);
     setTimeout(() => {
       document.getElementById('loading').classList.remove('on');
@@ -1839,48 +1622,6 @@ async function runRealVideo(query) {
   }
 }
 
-function showVideo() {
-  clearResult();
-  base.material.opacity = 0.28;
-  const me = idx[D.demo], nb = (D.neighbors || []).map(y => idx[y]).filter(i => i !== undefined);
-  if (me !== undefined) {
-    nb.forEach(i => overlay.add(line(pos(me), pos(i), 0x4DA3FF, 0.5)));
-    overlay.add(cloud(nb, () => '#4DA3FF', 0.34, 1));
-    overlay.add(cloud([me], () => '#FFFFFF', 0.48, 1));
-    const r = new THREE.Sprite(new THREE.SpriteMaterial({ map: RING, color: 0x4DA3FF, depthTest: false }));
-    r.position.copy(pos(me)); r.scale.set(0.92, 0.92, 1); overlay.add(r);
-    const info = (D.info || {})[D.demo] || {}, dur = fmtDur(info.d);
-    document.getElementById('right').innerHTML = `
-      <section class="panel-card">
-        <h4>Tu video</h4>
-        <div class="vid"><img src="${thumb(D.demo)}" alt=""><h3>${info.t || D.demo}</h3>
-          <small>${info.ch || ''} · ${dur.txt} · ${(info.v || 0).toLocaleString('es-CL')} vistas</small></div>
-      </section>
-      <section class="panel-card">
-        <h4>Palabras de la miniatura</h4>
-        <div class="tags-wrap">${(D.thumb_words || []).slice(0, 5).map(w => `<span class="tag-chip">${w.w}</span>`).join('')}</div>
-      </section>
-      <section class="panel-card">
-        <h4>Videos más cercanos</h4>
-        <div class="nb">${(D.neighbors || []).slice(0, 6).map((y, k) => `<div class="nb-card"><img src="${thumb(y)}" alt=""><span class="nb-title">${(D.info[y] || {}).t || ''}</span><code>${(D.neighbor_sims || [])[k] ? D.neighbor_sims[k].toFixed(2) : ''}</code></div>`).join('')}</div>
-      </section>`;
-    document.getElementById('main').classList.add('with-right');
-    resize();
-    const tl = document.getElementById('timeline');
-    if (D.frames) {
-      tl.innerHTML = `
-        <div class="tl-head"><h4>Contenido por frames</h4><small>palabras del vocabulario más cercanas a cada frame</small></div>
-        <div class="track">${D.frames.map(f => `<b style="left:${f.pct}%"></b>`).join('')}</div>
-        <div class="frames">${D.frames.map(f => `<div class="frame"><img src="${f.src}" alt="">
-          <div><code>${mmss(dur.s * f.pct / 100)}</code><div class="words">${f.words.slice(0, 3).map(w =>
-            `<div><em>${w.w}</em><span style="width:${Math.max(8, (w.s - 0.5) / 0.2 * 100)}%"></span></div>`).join('')}</div></div></div>`).join('')}</div>`;
-      tl.classList.add('on');
-    }
-    return pos(me);
-  }
-  return new THREE.Vector3();
-}
-
 function showExternalImageResult(data) {
   clearResult();
   base.material.opacity = 0.28;
@@ -1892,9 +1633,7 @@ function showExternalImageResult(data) {
   currentVideoData = data;
   currentTargetPos = targetPos;
   currentRelTab = 'nearest';
-  data._farthestList = (data.farthest && data.farthest.length)
-    ? data.farthest
-    : computeFarthestFallback(targetCoords, null, 12);
+  data._farthestList = data.farthest || [];
 
   renderRelationOverlay(targetPos, data.neighbors || [], false);
 
@@ -2017,49 +1756,11 @@ async function runImageSearch(payload) {
       body: JSON.stringify(payload)
     });
     clearInterval(timer);
-    let data;
-    if (res.ok) {
-      data = await res.json();
-    } else {
-      // Fallback determinístico en cliente sobre los 5.000 puntos visuales si el proceso uvicorn aún no fue reiniciado
-      const labelStr = payload.label || payload.image_url || 'Imagen externa';
-      const ytMatch = /\/vi\/([A-Za-z0-9_-]{11})\//.exec(payload.image_url || '');
-      let anchorIdx = (ytMatch && idx[ytMatch[1]] !== undefined) ? idx[ytMatch[1]] : null;
-      if (anchorIdx === null) {
-        let hash = 0;
-        const src = payload.image_url || payload.image_data || labelStr;
-        for (let i = 0; i < Math.min(src.length, 500); i++) hash = ((hash << 5) - hash + src.charCodeAt(i)) | 0;
-        anchorIdx = Math.abs(hash) % Math.max(1, D.pts.length);
-      }
-      const targetCoords = D.pts[anchorIdx] || [0, 0, 0];
-      const dists = D.pts.map((pt, i) => ({
-        i,
-        d: Math.hypot(pt[0] - targetCoords[0], pt[1] - targetCoords[1], pt[2] - targetCoords[2])
-      })).sort((a, b) => a.d - b.d);
-      const neighbors = dists.slice(0, 12).map((item, rank) => {
-        const yid = D.ids[item.i];
-        const inf = (D.info && D.info[yid]) || {};
-        return {
-          youtube_id: yid,
-          title: D.titles[item.i] || inf.t || yid,
-          channel_title: inf.ch || '',
-          vertical: inf.c || (D.cats && D.cat ? D.cats[D.cat[item.i]] : ''),
-          similarity: Math.max(0.74, 0.91 - rank * 0.014),
-          projection: D.pts[item.i]
-        };
-      });
-      data = {
-        representation: 'image',
-        external_image: {
-          label: labelStr,
-          preview_url: payload.image_data || payload.image_url || '',
-          persisted: false
-        },
-        projection: targetCoords,
-        neighbors,
-        farthest: computeFarthestFallback(targetCoords, null, 12)
-      };
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || `Error del servidor (${res.status})`);
     }
+    const data = await res.json();
     document.getElementById('loading').classList.remove('on');
     const targetPos = showExternalImageResult(data);
     setCamera(targetPos, 16);
@@ -2081,9 +1782,7 @@ function showRealProfileResult(data) {
   currentVideoData = data;
   currentTargetPos = targetPos;
   currentRelTab = 'nearest';
-  data._farthestList = (data.farthest && data.farthest.length)
-    ? data.farthest
-    : computeFarthestFallback(targetCoords, null, 12);
+  data._farthestList = data.farthest || [];
 
   renderRelationOverlay(targetPos, data.neighbors || [], false);
 
@@ -2202,103 +1901,19 @@ async function runRealProfile(query) {
       body: JSON.stringify({ profile: query })
     });
     clearInterval(timer);
-    if (res.ok) {
-      const data = await res.json();
-      document.getElementById('loading').classList.remove('on');
-      const targetPos = showRealProfileResult(data);
-      setCamera(targetPos, 24);
-      return;
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || `Error del servidor (${res.status})`);
     }
-  } catch (_) {
-    clearInterval(timer);
-  }
-
-  // Fallback cliente: buscar videos del canal en los 36.041 videos cargados o usar el perfil demo
-  document.getElementById('loading').classList.remove('on');
-  const qNorm = query.replace(/^https?:\/\/(www\.)?youtube\.com\/@?/i, '').replace(/^@/, '').trim().toLowerCase();
-  const matchedIdx = [];
-  if (qNorm && !qNorm.includes('perfil_demo')) {
-    for (let i = 0; i < D.ids.length; i++) {
-      const yid = D.ids[i];
-      const inf = (D.info && D.info[yid]) || {};
-      const ch = String(inf.ch || '').toLowerCase();
-      const title = String(D.titles[i] || '').toLowerCase();
-      if (ch.includes(qNorm) || title.includes(qNorm)) {
-        matchedIdx.push(i);
-        if (matchedIdx.length >= 40) break;
-      }
-    }
-  }
-  if (matchedIdx.length >= 3) {
-    const centroid = [0, 1, 2].map(k => matchedIdx.reduce((a, i) => a + D.pts[i][k], 0) / matchedIdx.length);
-    const profVids = matchedIdx.map(i => ({
-      youtube_id: D.ids[i],
-      title: D.titles[i],
-      vertical: (D.info[D.ids[i]] || {}).c || D.cats[D.cat[i]],
-      projection: D.pts[i]
-    }));
-    const dists = D.pts.map((pt, i) => ({
-      i,
-      d: Math.hypot(pt[0] - centroid[0], pt[1] - centroid[1], pt[2] - centroid[2])
-    })).sort((a, b) => a.d - b.d);
-    const neighbors = dists.slice(0, 12).map((item, rank) => {
-      const yid = D.ids[item.i];
-      const inf = (D.info && D.info[yid]) || {};
-      return {
-        youtube_id: yid,
-        title: D.titles[item.i] || inf.t || yid,
-        channel_title: inf.ch || '',
-        vertical: inf.c || D.cats[D.cat[item.i]],
-        similarity: Math.max(0.75, 0.93 - rank * 0.015),
-        projection: D.pts[item.i]
-      };
-    });
-    const targetPos = showRealProfileResult({
-      profile: { title: query, query, analyzed_videos: profVids.length, cohesion: 0.86 },
-      projection: centroid,
-      profile_videos: profVids,
-      neighbors,
-      farthest: computeFarthestFallback(centroid, null, 12)
-    });
+    const data = await res.json();
+    document.getElementById('loading').classList.remove('on');
+    const targetPos = showRealProfileResult(data);
     setCamera(targetPos, 24);
-  } else {
-    const target = showProfile();
-    setCamera(target, 30);
+  } catch (err) {
+    clearInterval(timer);
+    document.getElementById('loading').classList.remove('on');
+    alert('No se pudo analizar el perfil:\n' + err.message);
   }
-}
-
-function showProfile() {
-  clearResult();
-  base.material.opacity = 0.28;
-  const ids = (D.profile || []).map(y => idx[y]).filter(i => i !== undefined);
-  const far = (D.far || []).map(y => idx[y]).filter(i => i !== undefined);
-  if (!ids.length) return new THREE.Vector3();
-  const c = ids.reduce((a, i) => a.add(pos(i)), new THREE.Vector3()).divideScalar(ids.length);
-  ids.forEach(i => overlay.add(line(c, pos(i), 0x4DA3FF, 0.25)));
-  overlay.add(cloud(ids, () => '#4DA3FF', 0.34, 1));
-  far.forEach(i => overlay.add(line(c, pos(i), 0xE2A336, 0.45)));
-  overlay.add(cloud(far, () => '#E2A336', 0.42, 1));
-  const r = new THREE.Sprite(new THREE.SpriteMaterial({ map: RING, color: 0x4DA3FF, depthTest: false }));
-  r.position.copy(c); r.scale.set(1.6, 1.6, 1); overlay.add(r);
-  const byCat = {};
-  D.profile.forEach(y => { const k = (D.info[y] || {}).c || '(Unknown)'; byCat[k] = (byCat[k] || 0) + 1; });
-  const rows = Object.entries(byCat).sort((a, b) => b[1] - a[1]);
-  document.getElementById('right').innerHTML = `
-    <section class="panel-card">
-      <h4>1 · Tu perfil · 40 likes</h4>
-      <div class="bars">${rows.map(([k, n]) => `<div>${k}<span style="width:${n / 40 * 110}px"></span><code>${n}</code></div>`).join('')}</div>
-    </section>
-    <section class="panel-card">
-      <h4>2 · Tu burbuja</h4>
-      <small style="color:var(--muted);font-size:12.5px;line-height:1.5">Tus likes ocupan ${rows.length} de las ${D.cats.length} categorías del mapa. El círculo marca el centro de tu perfil.</small>
-    </section>
-    <section class="panel-card">
-      <h4 style="color:var(--amber)">3 · Fuera de tu burbuja</h4>
-      <div class="nb">${(D.far || []).map(y => `<div class="nb-card"><img src="${thumb(y)}" alt=""><span class="nb-title">${(D.info[y] || {}).t || ''}</span><code style="color:var(--amber)">${((D.info[y] || {}).c || '').split(' ')[0]}</code></div>`).join('')}</div>
-    </section>`;
-  document.getElementById('main').classList.add('with-right');
-  resize();
-  return c;
 }
 
 function isLikelyVideoInput(val) {
@@ -2318,8 +1933,8 @@ function isLikelyImageUrl(val) {
 
 function run(m) {
   if (m === 'profile') {
-    const query = q.value.trim() || 'youtube.com/@perfil_demo · últimos 40 likes';
-    q.value = query;
+    const query = q.value.trim();
+    if (!query) return;
     modeInputs.profile = query;
     q.classList.add('filled');
     runRealProfile(query);
@@ -2331,8 +1946,8 @@ function run(m) {
       runImageSearch({ image_data: pendingImageDataUrl, label: pendingImageLabel });
       return;
     }
-    const query = q.value.trim() || `https://i.ytimg.com/vi/${D.demo || 'W-MuJ9tlwPA'}/mqdefault.jpg`;
-    q.value = query;
+    const query = q.value.trim();
+    if (!query) return;
     modeInputs.image = query;
     q.classList.add('filled');
     runImageSearch({ image_url: query, label: query });
@@ -2348,7 +1963,7 @@ function run(m) {
     return;
   }
 
-  const query = q.value.trim() || (D.demo ? 'https://www.youtube.com/watch?v=' + D.demo : '');
+  const query = q.value.trim();
   if (!query) return;
   q.value = query;
   modeInputs.video = query;
@@ -2373,22 +1988,15 @@ function resize() {
   renderer.setSize(r.width, r.height); camera.aspect = r.width / r.height; camera.updateProjectionMatrix();
   updateLandmarksPositions();
 }
-function applyHash() {
+function start() {
   resize();
-  const h = location.hash.slice(1) || 'explore';
   clearResult(); document.getElementById('loading').classList.remove('on'); tip.style.display = 'none';
-  setMode(h.includes('profile') ? 'profile' : 'video', false);
+  setMode('video', false);
   setCamera(new THREE.Vector3(), 30);
   controls.autoRotate = false;
-  if (h.startsWith('input')) { q.value = h === 'input' ? 'https://www.youtube.com/watch?v=' + D.demo : 'youtube.com/@perfil_demo · últimos 40 likes'; q.classList.add('filled'); }
-  if (h.startsWith('loading')) { q.value = h === 'loading' ? 'https://www.youtube.com/watch?v=' + D.demo : 'youtube.com/@perfil_demo · últimos 40 likes'; q.classList.add('filled'); loading(h === 'loading' ? 'video' : 'profile', 2); }
-  if (h === 'video') { q.value = 'https://www.youtube.com/watch?v=' + D.demo; q.classList.add('filled'); requestAnimationFrame(() => { resize(); setCamera(showVideo(), 16); }); }
-  if (h === 'profile') { q.value = 'youtube.com/@perfil_demo · últimos 40 likes'; q.classList.add('filled'); requestAnimationFrame(() => { resize(); setCamera(showProfile(), 30); }); }
-  if (h === 'explore') requestAnimationFrame(() => { controls.update(); renderer.render(scene, camera); });
 }
 window.addEventListener('resize', resize);
-window.addEventListener('hashchange', applyHash);
-applyHash();
+start();
 (function loop() {
   requestAnimationFrame(loop);
   controls.update();
