@@ -73,6 +73,8 @@ Usamos la versión~2 (2018) de YouTube-8M~\cite{yt8m}, con $\sim$6,1 millones de
 Del split de entrenamiento descargamos una muestra aleatoria de $\sim$1\,\%: 41 archivos
 (\emph{shards}), seleccionados de forma determinística por el hash MD5 de su nombre.
 
+De ahora en adelante, se propone modelar matemáticamente este proceso, con el objetivo de darle algún sustento, orden y referencia. 
+
 Sea $\mathcal{I} = \{1, \dots, N\}$ el conjunto de videos de la muestra, con $N = 41.393$.
 Construimos la tabla $Y$, cuya fila $i$ es
 \[
@@ -92,7 +94,7 @@ A cada video le asignamos una \emph{categoría gruesa}
   c_i = \moda\{\, \mathrm{Vertical1}(j) : j \in \ell_i \,\},
 \]
 con 25 valores posibles. Esta categoría es la referencia para evaluar las representaciones.
-\todo{Mencionar el desbalance: Arts \& Entertainment y Games concentran la mayoría.}
+Luego nos encontraremos (y trataremos de resolver) un problema de proporcionalidad dentro de estas categorías (hay 2 que están sobre representadas en el dataset y/o abarcan-generalizan contenido).
 
 \subsection{Metadatos desde la YouTube Data API}
 Los \texttt{pid} no son identificadores de YouTube. Existe una función \emph{parcial}
