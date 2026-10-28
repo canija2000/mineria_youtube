@@ -191,7 +191,14 @@
   .proj label span { width: 11px; height: 11px; border-radius: 50%; border: 1.5px solid #454E5C; flex: none; }
   .proj label.on span { border-color: var(--cyan); background: radial-gradient(var(--cyan) 38%, transparent 44%); }
   .proj label small { margin-left: auto; font: 10px 'JetBrains Mono'; color: var(--muted); }
-  .legend { display: flex; flex-direction: column; gap: 2px; font-size: 12.5px; }
+  .color-by { display: flex; gap: 2px; padding: 2px; border: 1px solid var(--line-strong); border-radius: 7px; }
+  .color-by button {
+    flex: 1; padding: 5px 0; border: 0; border-radius: 5px; background: transparent;
+    color: var(--muted); font: 11.5px 'JetBrains Mono'; cursor: pointer;
+  }
+  .color-by button:hover { color: var(--text); }
+  .color-by button.on { background: var(--panel-2); color: var(--text); }
+  .legend { display: flex; flex-direction: column; gap: 2px; font-size: 12.5px; min-height: 0; overflow-y: auto; margin-right: -8px; padding-right: 8px; }
   .legend div {
     display: flex;
     align-items: center;
@@ -577,7 +584,12 @@
         <label class="disabled" title="Próximamente"><span></span>Fusión temprana</label>
         <label class="disabled" title="Próximamente"><span></span>Fusión tardía</label>
       </div>
-      <div><h4>Categorías</h4></div>
+      <div><h4>Colorear por</h4></div>
+      <div class="color-by" id="color-by">
+        <button id="cb-vertical" class="on" onclick="setColorMode('vertical')" title="Categoría de YouTube según las etiquetas de YT-8M">YouTube</button>
+        <button id="cb-cluster" onclick="setColorMode('cluster')" title="Grupos que HDBSCAN encuentra en el mapa, con nombre zero-shot">HDBSCAN</button>
+      </div>
+      <div><h4 id="legend-title">Categorías</h4></div>
       <div class="legend" id="legend"></div>
     </aside>
     <div id="view">
@@ -596,11 +608,15 @@
 <script>
 const API_BASE = (window.location.origin === 'null' || window.location.protocol === 'file:') ? 'http://127.0.0.1:8000' : '';
 // D se llena con la respuesta de /map (applyMapPayload)
-let D = { cats: [], ids: [], titles: [], cat: [], pts: [], info: {} };
+let D = { cats: [], ids: [], titles: [], cat: [], pts: [], info: {}, parts: { vertical: { cats: [], cat: [] }, cluster: null } };
 let currentRepresentation = 'text';
-const PALETTE = ['#4DA3FF', '#E2A336', '#D96B62', '#68B87A', '#9D7FE8', '#D97EB0', '#54B8B1', '#E08258', '#869CEB', '#C4BE62'];
+const PALETTE = ['#4DA3FF', '#E2A336', '#D96B62', '#68B87A', '#9D7FE8', '#D97EB0', '#54B8B1', '#E08258', '#869CEB', '#C4BE62',
+  '#2F7FD8', '#B97F1E', '#B04A42', '#478F57', '#7558C4', '#B0588A', '#2F928B', '#B85F37', '#5E74C4', '#9C9640'];
+// Colorear por categoría de YouTube ('vertical') o por grupo HDBSCAN ('cluster')
+let colorMode = 'vertical';
+const nColored = () => colorMode === 'cluster' ? PALETTE.length : 10;
 const OTHER = '#4B5563';
-const colorOf = c => c < PALETTE.length ? PALETTE[c] : OTHER;
+const colorOf = c => c < nColored() ? PALETTE[c] : OTHER;
 const thumb = id => 'https://i.ytimg.com/vi/' + id + '/mqdefault.jpg';
 let idx = Object.fromEntries((D.ids || []).map((y, i) => [y, i]));
 const fmtDur = d => {
@@ -663,7 +679,7 @@ function applyCategoryFilter(catIdx) {
     for (let i = 0; i < P.length; i++) {
       const cIdx = D.cat[i];
       const matches = activeCatFilter === null
-        || (activeCatFilter === 'other' ? cIdx >= 10 : cIdx === activeCatFilter);
+        || (activeCatFilter === 'other' ? cIdx >= nColored() : cIdx === activeCatFilter);
       const c = matches ? new THREE.Color(colorOf(cIdx)) : dimColor;
       colAttr.setXYZ(i, c.r, c.g, c.b);
     }
@@ -674,14 +690,16 @@ function applyCategoryFilter(catIdx) {
 
 function updateLegend() {
   if (!D.cats || !D.cats.length) return;
+  const n = nColored();
   const counts = D.cats.map((_, c) => D.cat.filter(x => x === c).length);
-  document.getElementById('legend').innerHTML = D.cats.slice(0, 10).map((n, c) => {
+  const otros = colorMode === 'cluster' ? 'Otros grupos' : 'Otras';
+  document.getElementById('legend').innerHTML = D.cats.slice(0, n).map((name, c) => {
     const cls = activeCatFilter === null ? '' : (activeCatFilter === c ? 'active' : 'dim');
-    return `<div class="${cls}" onclick="applyCategoryFilter(${c})" title="Filtrar categoría: ${n}"><b style="background:${colorOf(c)}"></b>${n}<em>${counts[c] || 0}</em></div>`;
+    return `<div class="${cls}" onclick="applyCategoryFilter(${c})" title="Filtrar: ${name}"><b style="background:${colorOf(c)}"></b>${name}<em>${counts[c] || 0}</em></div>`;
   }).join('') +
-    (D.cats.length > 10 ? (() => {
+    (D.cats.length > n ? (() => {
       const cls = activeCatFilter === null ? '' : (activeCatFilter === 'other' ? 'active' : 'dim');
-      return `<div class="${cls}" onclick="applyCategoryFilter('other')" title="Filtrar otras categorías"><b style="background:${OTHER}"></b>Otras ${D.cats.length - 10}<em>${counts.slice(10).reduce((a, b) => a + b, 0)}</em></div>`;
+      return `<div class="${cls}" onclick="applyCategoryFilter('other')" title="Filtrar el resto"><b style="background:${OTHER}"></b>${otros} ${D.cats.length - n}<em>${counts.slice(n).reduce((a, b) => a + b, 0)}</em></div>`;
     })() : '');
 }
 updateLegend();
@@ -729,15 +747,15 @@ let base = cloud(all, i => colorOf(D.cat[i]), 0.15, 0.85);
 scene.add(base);
 let overlay = new THREE.Group(); scene.add(overlay);
 
-function applyMapPayload(data, rep) {
-  const p = data.points;
-  const rawCats = (data.verticals || []).slice();
-  rawCats.push('(Sin categoría)');
-  const rawUnkIdx = rawCats.length - 1;
-  const rawCatPerPt = p.vertical.map(v => v < 0 ? rawUnkIdx : v);
-
-  const freq = rawCats.map((name, i) => ({ name, i, count: 0 }));
-  rawCatPerPt.forEach(c => { if (freq[c]) freq[c].count++; });
+// Una partición del mapa (categorías de YouTube o grupos HDBSCAN), ordenada por tamaño:
+// el índice 0 es la más grande, así los colores van a las más grandes y las "(…)" quedan al final.
+function partition(names, perPoint, emptyLabel) {
+  const raw = (names || []).slice();
+  raw.push(emptyLabel);
+  const emptyIdx = raw.length - 1;
+  const perPt = perPoint.map(v => v < 0 ? emptyIdx : v);
+  const freq = raw.map((name, i) => ({ name, i, count: 0 }));
+  perPt.forEach(c => { if (freq[c]) freq[c].count++; });
   freq.sort((a, b) => {
     const aUnk = a.name.startsWith('(') ? 1 : 0;
     const bUnk = b.name.startsWith('(') ? 1 : 0;
@@ -745,11 +763,42 @@ function applyMapPayload(data, rep) {
     return b.count - a.count;
   });
   const oldToNew = Object.fromEntries(freq.map((f, newIdx) => [f.i, newIdx]));
+  const cats = freq.filter(f => f.count > 0 || !f.name.startsWith('(')).map(f => f.name);
+  return { cats, cat: perPt.map(oldIdx => oldToNew[oldIdx] ?? (cats.length - 1)) };
+}
 
-  D.cats = freq.map(f => f.name);
+function applyColorMode() {
+  const part = (colorMode === 'cluster' && D.parts.cluster) ? D.parts.cluster : D.parts.vertical;
+  D.cats = part.cats;
+  D.cat = part.cat;
+  document.getElementById('legend-title').textContent = colorMode === 'cluster' ? 'Grupos HDBSCAN' : 'Categorías';
+}
+
+function setColorMode(mode) {
+  if (mode === colorMode || (mode === 'cluster' && !D.parts.cluster)) return;
+  colorMode = mode;
+  document.getElementById('cb-vertical').classList.toggle('on', mode === 'vertical');
+  document.getElementById('cb-cluster').classList.toggle('on', mode === 'cluster');
+  applyColorMode();
+  applyCategoryFilter(null);     // quita el filtro y repinta todos los puntos con la nueva partición
+}
+
+function applyMapPayload(data, rep) {
+  const p = data.points;
+  D.parts = {
+    vertical: partition(data.verticals, p.vertical, '(Sin categoría)'),
+    cluster: (data.clusters && data.clusters.length && p.cluster)
+      ? partition(data.clusters, p.cluster, '(Sin grupo)') : null,
+  };
+  document.getElementById('color-by').style.display = D.parts.cluster ? '' : 'none';
+  if (!D.parts.cluster && colorMode === 'cluster') {
+    colorMode = 'vertical';
+    document.getElementById('cb-vertical').classList.add('on');
+    document.getElementById('cb-cluster').classList.remove('on');
+  }
+  applyColorMode();
   D.ids = p.youtube_id;
   D.titles = p.title;
-  D.cat = rawCatPerPt.map(oldIdx => oldToNew[oldIdx] ?? (D.cats.length - 1));
   D.pts = [];
   D.info = D.info || {};
   for (let i = 0; i < p.youtube_id.length; i++) {
@@ -875,7 +924,8 @@ function showTip(i) {
   if (!P[i]) return;
   const v = pos(i).project(camera), r = renderer.domElement.getBoundingClientRect();
   const x = (v.x + 1) / 2 * r.width, y = (1 - v.y) / 2 * r.height;
-  const catName = D.cats[D.cat[i]] || '';
+  const vert = D.parts.vertical, grp = D.parts.cluster;
+  const catName = (vert.cats[vert.cat[i]] || '') + (grp ? ` · grupo: ${grp.cats[grp.cat[i]] || ''}` : '');
   tip.innerHTML = `${D.titles[i] || ''}<small>${catName}</small>`;
   tip.style.left = (x + 14) + 'px'; tip.style.top = (y - 10) + 'px'; tip.style.display = 'block';
 }

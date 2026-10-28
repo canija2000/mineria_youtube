@@ -36,6 +36,7 @@ Sobre los 34.771 videos con todas las representaciones (`data/metricas.csv`, not
 | Pipeline | YT-8M → API de YouTube → miniaturas → embeddings → mapas | `recolect.py`, `recolect/pipeline.py` |
 | Avance de miniaturas | progreso de los embeddings de imagen mientras corre el pipeline | `python3 -m recolect.avance` |
 | Mapas versionados | UMAP 3D de texto y de miniaturas + molde para ubicar videos nuevos | `remap.py`, `recolect/mapping.py` |
+| Grupos del mapa | HDBSCAN + nombre zero-shot por versión de mapa; la web colorea por grupo o por categoría | `recolect/clusters.py` |
 | Videos recibidos | SQLite con metadatos y vector de texto | `recolect/received.py` |
 | API | `/health`, `/map`, `/videos`, `/concepts`, `/images`, `/profiles` | `server/app.py`, `server/catalog.py` |
 | Web | visor Three.js conectado a la API | `web/index.html` |

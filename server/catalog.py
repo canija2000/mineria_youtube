@@ -16,7 +16,8 @@ from threading import RLock
 import numpy as np
 import pandas as pd
 
-from recolect.mapping import current_info, load_base_vectors, load_current
+from recolect import clusters as map_clusters
+from recolect.mapping import current_info, load_base_vectors, load_current, maps_dir
 from recolect.received import ReceivedStore, store_path
 
 
@@ -83,6 +84,8 @@ class VideoCatalog:
         self.image_vectors: np.ndarray | None = None
         self.image_coordinates: np.ndarray | None = None
         self.image_meta: dict = {}
+        self.image_cluster_ids: np.ndarray | None = None
+        self.image_cluster_names: list[str] = []
         self._load_image_space()
 
         self.map_meta: dict = {}
@@ -209,11 +212,19 @@ class VideoCatalog:
         self.image_positions = {yid: i for i, yid in enumerate(self.image_ids)}
         self.image_vectors = vectors[keep]
         self.image_coordinates = coords.loc[keep, ["x", "y", "z"]].to_numpy(dtype=np.float32)
+        loaded = map_clusters.load(maps_dir(self.data_dir, "image") / meta["version"])
+        if loaded:
+            table, _centroids, summary = loaded
+            cluster_of = dict(zip(table["youtube_id"], table["cluster"]))
+            self.image_cluster_ids = np.array([cluster_of.get(i, -1) for i in self.image_ids], dtype=np.int16)
+            self.image_cluster_names = [c["name"] for c in sorted(summary, key=lambda c: c["id"])]
         print(f"[catálogo] mapa de miniaturas {meta['version']}: {len(self.image_ids):,} videos", flush=True)
 
     def _load_map(self):
         meta, coords, reducer = load_current(self.data_dir)
         self.map_meta, self.reducer = meta, reducer
+        # Grupos HDBSCAN de esta versión (recolect/clusters.py); None si el mapa no los tiene
+        self.map_clusters = map_clusters.load(maps_dir(self.data_dir) / meta["version"])
         self.map_coords = {video_id: np.array([x, y, z], dtype=np.float32)
                            for video_id, x, y, z in coords[["youtube_id", "x", "y", "z"]].itertuples(index=False)}
         self._rebuild()
@@ -250,6 +261,24 @@ class VideoCatalog:
         missing = np.flatnonzero(~self.in_map)
         if len(missing):
             self.coordinates[missing] = self.reducer.transform(self.vectors[missing]).astype(np.float32)
+
+        # Grupo HDBSCAN: el del mapa; lo que llegó después va al centroide más parecido.
+        self.cluster_ids = np.full(len(self.ids), -1, dtype=np.int16)
+        self.cluster_names: list[str] = []
+        if self.map_clusters:
+            table, centroids, summary = self.map_clusters
+            self.cluster_names = [c["name"] for c in sorted(summary, key=lambda c: c["id"])]
+            cluster_of = dict(zip(table["youtube_id"], table["cluster"]))
+            for i, video_id in enumerate(self.ids):
+                self.cluster_ids[i] = cluster_of.get(video_id, -1)
+            unassigned = np.flatnonzero(self.cluster_ids < 0)
+            if len(unassigned):
+                self.cluster_ids[unassigned] = np.argmax(self.vectors[unassigned] @ centroids.T, axis=1)
+
+    def _cluster_for(self, vector: np.ndarray) -> int:
+        if not self.map_clusters:
+            return -1
+        return int(np.argmax(self.map_clusters[1] @ vector))
 
     def refresh_map(self):
         """Si `remap.py` publicó un mapa nuevo o entraron lotes en SQLite (`--modern`), actualiza el catálogo."""
@@ -318,7 +347,10 @@ class VideoCatalog:
                         "vertical": [vertical_index.get(self.verticals.get(i, ""), -1) for i in self.image_ids],
                         "source": [0] * len(self.image_ids),
                         "in_map": [True] * len(self.image_ids),
+                        "cluster": (self.image_cluster_ids.tolist() if self.image_cluster_ids is not None
+                                    else [-1] * len(self.image_ids)),
                     },
+                    "clusters": self.image_cluster_names,
                 }
                 self._image_map_cache = (self.image_meta["version"], payload)
                 return payload
@@ -347,7 +379,9 @@ class VideoCatalog:
                     "vertical": [vertical_index.get(self.verticals.get(i), -1) for i in self.ids],
                     "source": [source_names.index(s) for s in self.sources],
                     "in_map": self.in_map.astype(bool).tolist(),
+                    "cluster": self.cluster_ids.tolist(),
                 },
+                "clusters": self.cluster_names,
             }
             self._map_cache = (key, payload)
             return payload
@@ -371,6 +405,7 @@ class VideoCatalog:
             self.vectors = np.vstack((self.vectors, vector.reshape(1, -1)))
             self.coordinates = np.vstack((self.coordinates, coordinate.reshape(1, -1)))
             self.in_map = np.append(self.in_map, False)
+            self.cluster_ids = np.append(self.cluster_ids, np.int16(self._cluster_for(vector)))
             # Solo cuenta el video recién agregado: si entró un lote por fuera (`--modern`),
             # el total de SQLite sigue distinto y el próximo refresh_map() lo carga.
             self._last_store_count += 1

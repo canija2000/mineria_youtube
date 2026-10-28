@@ -105,8 +105,11 @@ El mapa (posiciones 3D y el "molde" UMAP para ubicar videos nuevos) se calcula *
 ```
 data/maps/current.json        # cuál versión está vigente
 data/maps/<versión>/coords.parquet, reducer.joblib, meta.json
+data/maps/<versión>/clusters.parquet, clusters.json, centroids.npy   # grupos HDBSCAN con nombre zero-shot
 data/maps_image/...           # lo mismo para el espacio de miniaturas
 ```
+
+Junto a cada mapa se guardan sus grupos HDBSCAN (`recolect/clusters.py`, el mismo procedimiento del notebook 05). La web los usa para colorear el mapa por grupo en vez de por categoría de YouTube. Para agregarlos a un mapa ya calculado sin rehacer el UMAP: `python3 -m recolect.clusters --rep text` (o `--rep image`).
 
 - `recolect.py` lo calcula en la etapa 11 si no existe o si cambiaron los vectores de texto (y el de miniaturas si cambió `emb_image.parquet`).
 - Cada video que llega al servidor se guarda en `data/webapp_catalog.sqlite3` (metadatos + vector) y se ubica sobre el mapa vigente sin modificarlo.
@@ -136,7 +139,7 @@ MAPA_DATA=data/dev uvicorn server.app:app --port 8000   # con los datos del modo
 
 La API usa `emb_text.parquet`, `emb_image.parquet`, `emb_vocab.parquet`, `yt8m_hydrated.parquet` y los mapas vigentes de `maps/` y `maps_image/` como catálogo base.
 
-- `GET /map?rep=text|image` entrega todos los puntos del mapa vigente (videos base + recibidos) en columnas: `youtube_id`, `x`, `y`, `z`, `title`, `channel_title`, `vertical` (índice en la lista `verticals`, -1 si no tiene), `source` (índice en `sources`: `yt8m` o `recibido`) e `in_map` (si el video ya formaba parte del cálculo del mapa o solo se ubicó sobre él). La respuesta va comprimida (gzip).
+- `GET /map?rep=text|image` entrega, además de las categorías, el grupo HDBSCAN de cada punto (`cluster`, índice en la lista `clusters`). Entrega todos los puntos del mapa vigente (videos base + recibidos) en columnas: `youtube_id`, `x`, `y`, `z`, `title`, `channel_title`, `vertical` (índice en la lista `verticals`, -1 si no tiene), `source` (índice en `sources`: `yt8m` o `recibido`) e `in_map` (si el video ya formaba parte del cálculo del mapa o solo se ubicó sobre él). La respuesta va comprimida (gzip).
 - `POST /videos` agrega o recupera un video y devuelve su posición, sus 12 vecinos, los 12 más lejanos y etiquetas zero-shot. Con `representation: "image"` lo ubica por su miniatura.
 - `POST /concepts` ubica una palabra o frase libre y devuelve la región del mapa más afín.
 - `POST /images` ubica una imagen cualquiera (URL o archivo arrastrado) en el espacio de miniaturas, sin guardarla.

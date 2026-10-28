@@ -133,6 +133,8 @@ def build_map(data_dir="data", min_new: int = 0, keep: int = 3, representation="
     pd.DataFrame({"youtube_id": ids, "x": coordinates[:, 0], "y": coordinates[:, 1],
                   "z": coordinates[:, 2], "source": sources}).to_parquet(staging / "coords.parquet", index=False)
     joblib.dump(reducer, staging / "reducer.joblib")
+    from .clusters import cluster_map, save as save_clusters
+    save_clusters(staging, *cluster_map(ids, vectors, coordinates, data_dir, representation))
     meta = {
         "version": version,
         "created_at": started.isoformat(),
