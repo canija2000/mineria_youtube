@@ -93,7 +93,7 @@ class VideoCatalog:
     def _load_verticals(self, metadata: pd.DataFrame) -> dict[str, str]:
         """Categoría general (vertical) de cada video base: la más frecuente entre sus etiquetas de YT-8M.
 
-        Es el mismo criterio de `review.ipynb` (mode(Vertical1)). Los videos recibidos no tienen
+        Es el mismo criterio de `analysis/metricas.py::categoria` (mode(Vertical1)). Los videos recibidos no tienen
         etiquetas de YT-8M, así que no tienen vertical.
         """
         vocab_path = self.data_dir / "emb_vocab.parquet"

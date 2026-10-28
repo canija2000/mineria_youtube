@@ -8,15 +8,9 @@ __pycache__/
 .DS_Store
 *.pdf 
 
-# datos: se ignora todo data/ salvo los resultados livianos para preview.ipynb
+# datos: se ignora todo data/ (se regenera con recolect.py) salvo la tabla de métricas
 data/*
-!data/projections.parquet
-!data/metricas_text.csv
-!data/metricas_text.png
-!data/metricas_modelos.csv
-!data/metricas_multimodal.csv
 !data/metricas.csv
-context.md
 
 # informe LaTeX: solo el .tex, el .pdf y las figuras; el resto son auxiliares de pdflatex/latexmk
 informe/*

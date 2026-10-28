@@ -1,6 +1,0 @@
-proyeccion,trustworthiness,silhouette_vertical,knn_acc_vertical,ARI_kmeans,NMI_kmeans
-pca3,0.83,-0.16,0.638,0.121,0.323
-umap,0.957,-0.163,0.764,0.143,0.36
-pca282_umap,0.958,-0.174,0.771,0.14,0.367
-original_768,,0.008,0.793,0.146,0.351
-baseline_mayoria,,,0.346,,
