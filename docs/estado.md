@@ -8,7 +8,7 @@
 - **Representaciones:** seis espacios para los mismos videos: TF-IDF, MiniLM y cuatro de EmbeddingGemma 2 (texto, imagen, imagen + texto en una pasada y fusión tardía). Todos completos para los 34.771 videos con miniatura.
 - **Mapas:** UMAP 3D versionado para texto (`data/maps/`) y para miniaturas (`data/maps_image/`). Se calculan fuera del servidor con `recolect.py` o `remap.py`.
 - **Servidor y web:** FastAPI sirve el mapa y la web en `http://127.0.0.1:8000`. Ubica videos, conceptos, imágenes y canales, con vecinos, lejanos y etiquetas zero-shot. La web ya no inventa resultados: si el servidor falla, muestra el error.
-- **Análisis:** `analysis/` + `notebooks/01–05` reemplazan a los notebooks exploratorios anteriores.
+- **Análisis:** `analysis/` + `notebooks/01–05` reemplazan a los notebooks exploratorios anteriores. El informe (`informe/main.tex`) ya usa estas cifras; sus figuras se regeneran con `GUARDAR_FIGS = True` en los notebooks 02–04.
 
 ## 2. Resultados principales
 
@@ -48,4 +48,3 @@ Sobre los 34.771 videos con todas las representaciones (`data/metricas.csv`, not
 2. **Videos recibidos en el mapa de miniaturas.** SQLite no guarda vectores de imagen, así que esos videos se ubican al consultarlos pero no entran en `remap.py --rep image`.
 3. **Línea de tiempo por frames.** Idea acordada, sin implementar: usar los storyboards de YouTube (intervalo proporcional al largo del video) y solo para los videos que ingresa el usuario. Cada frame se compara con el vocabulario igual que una miniatura.
 4. **Perfil por likes.** La API solo entrega los likes de la cuenta propia y con OAuth (`videos.list(myRating=like)`). Hoy `/profiles` usa los últimos videos públicos de un canal o playlist.
-5. **Actualizar el informe.** Las figuras de `informe/figs/` son de la muestra anterior de 5.000 videos. Se regeneran corriendo los notebooks 02–04 con `GUARDAR_FIGS = True`, y luego hay que revisar las cifras del texto.
