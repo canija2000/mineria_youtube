@@ -1000,11 +1000,40 @@ imgFileInput.addEventListener('change', e => {
   el.addEventListener('drop', e => {
     e.preventDefault();
     searchField.classList.remove('dragover');
-    if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0]) {
-      handleImageFile(e.dataTransfer.files[0]);
+    const dt = e.dataTransfer;
+    if (!dt) return;
+    if (dt.files && dt.files[0]) {
+      handleImageFile(dt.files[0]);
+      return;
     }
+    // Imagen arrastrada desde otra pestaña (Google Imágenes, una web cualquiera):
+    // el navegador no entrega un archivo, solo la URL o el HTML del <img>.
+    const dropped = imageFromDrop(dt);
+    if (!dropped) {
+      alert('No se encontró una imagen en lo que arrastraste.');
+      return;
+    }
+    modeInputs.image = dropped.label;
+    setMode('image', false);
+    runImageSearch(dropped);
   });
 });
+
+function imageFromDrop(dt) {
+  const uri = (dt.getData('text/uri-list') || dt.getData('text/plain') || '').split('\n')[0].trim();
+  // Google Imágenes enlaza a /imgres?imgurl=<original>: preferimos la imagen original.
+  try {
+    const original = new URL(uri).searchParams.get('imgurl');
+    if (original) return { image_url: original, label: original.split('/').pop().split('?')[0] };
+  } catch (_) {}
+  // Si no, el src del <img> arrastrado (puede ser http o una miniatura data:image en base64).
+  const html = dt.getData('text/html');
+  const src = html && new DOMParser().parseFromString(html, 'text/html').querySelector('img')?.getAttribute('src');
+  if (src && src.startsWith('data:image/')) return { image_data: src, label: 'Imagen arrastrada' };
+  if (src && /^https?:\/\//.test(src)) return { image_url: src, label: src.split('/').pop().split('?')[0] };
+  if (/^https?:\/\//.test(uri)) return { image_url: uri, label: uri.split('/').pop().split('?')[0] };
+  return null;
+}
 
 // Pantalla de carga
 const STEPS = {
