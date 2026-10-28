@@ -42,7 +42,7 @@
 
 \title{\textbf{Mapeando YouTube fuera de la burbuja}\\[4pt]
   \large Embeddings multimodales de videos con EmbeddingGemma~2}
-\author{\todo{Integrantes} \\ IIC2433 Minería de Datos — 2026-2}
+\author{Joaquín Bächler - Matías Morales - Franco Moya - Cristóbal Vargas \\ IIC2433 Minería de Datos — 2026-2}
 \date{\today}
 
 \begin{document}
@@ -50,10 +50,9 @@
 
 \begin{abstract}
 \todo{Escribir al final (5--6 líneas): problema, datos, método, resultado principal.}
-Representamos 34.788 videos de YouTube en un espacio vectorial común usando EmbeddingGemma~2,
+Representamos $\approx 36.000$ videos de YouTube en un espacio vectorial común usando \texttt{EmbeddingGemma~2},
 a partir de su texto (título, tags y descripción) y de su miniatura. Sobre el texto, el modelo
-supera a dos baselines (TF-IDF y MiniLM) en todas las métricas. Sobre los 34.771 videos con
-miniatura, la imagen por sí sola es casi tan informativa como el texto, y su fusión tardía mejora la
+supera a dos baselines (TF-IDF y MiniLM) en todas las métricas. Sobre los videos, la imagen (thumbnail) por sí sola es casi tan informativa como el texto, y su fusión tardía mejora la
 recuperación de la categoría temática (kNN de 0,798 a 0,838). Además, como imagen y texto
 comparten el espacio, la miniatura permite etiquetar videos sin entrenamiento (zero-shot):
 en el 60\,\% de los casos, alguna de las 5 etiquetas predichas es una etiqueta real.
@@ -61,11 +60,10 @@ en el 60\,\% de los casos, alguna de las 5 etiquetas predichas es una etiqueta r
 
 % =====================================================================
 \section{Introducción}
-\todo{Motivación: las plataformas recomiendan contenido cercano a lo que ya consumimos
-(burbujas de filtro). Pregunta: ¿podemos construir un mapa del contenido de YouTube que
-permita, más adelante, recomendar videos \emph{fuera} de esa zona? Contribuciones:
+Las plataformas, como \texttt{YouTube} recomiendan contenido cercano a lo que ya consumimos, llamemos a esto \textit{burbujas de filtro}. Nos interesaría saber si ¿podemos construir un mapa del contenido de YouTube que
+permita recomendar videos \emph{fuera} de esa zona? Contribuciones:
 (1) pipeline de datos YT-8M + API, (2) comparación de representaciones de texto,
-imagen y multimodales, (3) etiquetado zero-shot desde la miniatura.}
+imagen y multimodales, (3) etiquetado zero-shot desde la miniatura.
 
 % =====================================================================
 \section{Datos}
