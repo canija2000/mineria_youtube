@@ -39,8 +39,18 @@ def maps_dir(data_dir="data", representation="text") -> Path:
 
 
 def load_base_vectors(data_dir="data", representation="text"):
-    """Vectores de los videos base (texto o miniatura), sin IDs vacíos ni repetidos."""
-    frame = pd.read_parquet(Path(data_dir) / f"emb_{representation}.parquet", columns=["youtube_id", "emb"])
+    """Vectores de los videos base (texto o miniatura), sin IDs vacíos ni repetidos.
+
+    Si no está `emb_<rep>.parquet` (por ejemplo, con el paquete liviano de
+    `analysis/paquete.py`), los toma de la columna `emb_<rep>` del consolidado.
+    """
+    path = Path(data_dir) / f"emb_{representation}.parquet"
+    if path.exists():
+        frame = pd.read_parquet(path, columns=["youtube_id", "emb"])
+    else:
+        frame = pd.read_parquet(Path(data_dir) / "embeddings_consolidated.parquet",
+                                columns=["youtube_id", f"emb_{representation}"])
+        frame = frame.rename(columns={f"emb_{representation}": "emb"}).dropna(subset=["emb"])
     frame = frame.dropna(subset=["youtube_id"]).drop_duplicates("youtube_id").reset_index(drop=True)
     ids = frame["youtube_id"].astype(str).tolist()
     vectors = np.stack(frame["emb"].to_numpy()).astype(np.float32)
@@ -61,8 +71,11 @@ def current_info(data_dir="data", representation="text") -> dict | None:
     return json.loads(meta_path.read_text())
 
 
-def load_current(data_dir="data", representation="text"):
-    """Devuelve (meta, coordenadas por youtube_id, reducer) del mapa vigente."""
+def load_current(data_dir="data", representation="text", with_reducer=True):
+    """Devuelve (meta, coordenadas por youtube_id, reducer) del mapa vigente.
+
+    El molde UMAP (reducer) pesa cientos de MB; con `with_reducer=False` no se carga y se devuelve None.
+    """
     import joblib
 
     meta = current_info(data_dir, representation)
@@ -71,7 +84,7 @@ def load_current(data_dir="data", representation="text"):
                                 f"Calcúlalo con: python3 remap.py --rep {representation} --data {data_dir}")
     folder = maps_dir(data_dir, representation) / meta["version"]
     coords = pd.read_parquet(folder / "coords.parquet")
-    reducer = joblib.load(folder / "reducer.joblib")
+    reducer = joblib.load(folder / "reducer.joblib") if with_reducer else None
     return meta, coords, reducer
 
 
