@@ -24,7 +24,7 @@ data/                  # todo lo generado (no se versiona, salvo data/metricas.c
 
 ## Por dónde empezar
 
-1. Prepara el entorno (sección siguiente) y corre `python3 recolect.py`, o pide a alguien del grupo una copia de `data/`.
+1. Prepara el entorno (sección siguiente) y consigue los datos: pide el paquete `mineria_youtube_datos.zip` (~320 MB) y descomprímelo en la raíz del repo con `unzip mineria_youtube_datos.zip`, o corre `python3 recolect.py` (varias horas).
 2. Lee los notebooks en orden: solo leen lo que dejó el pipeline, no recalculan nada pesado.
 3. Levanta el servidor (`uvicorn server.app:app --port 8000`) y abre `http://127.0.0.1:8000`.
 
@@ -97,6 +97,8 @@ python3 -m recolect.avance
 `python3 -m analysis.metricas` evalúa las seis representaciones sobre los mismos videos (kNN en el espacio original y en UMAP 3D, NMI de K-Means contra la categoría) y escribe `data/metricas.csv` y `data/proyecciones.parquet`, que leen los notebooks 02 y 03. Tarda ~5 minutos; solo hace falta volver a correrlo si cambian los embeddings.
 
 Los notebooks guardan sus figuras en `informe/figs/` solo si se cambia `GUARDAR_FIGS = True` en su primera celda.
+
+Para compartir los datos sin que el resto tenga que correr `recolect.py`, `python3 -m analysis.paquete` arma `mineria_youtube_datos.zip` (~320 MB). Trae solo lo que leen los notebooks, con los embeddings en float16: los resultados no cambian (hit@k igual a 4 decimales). No incluye las miniaturas, porque los notebooks bajan de YouTube las que muestran, ni el molde UMAP del servidor; para levantar la web hace falta `data/` completo.
 
 ## Mapa 3D guardado y recálculo
 
