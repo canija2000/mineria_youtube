@@ -23,3 +23,6 @@ informe/*
 
 # entregas (presentaciones, videos, pauta): fuera del control de versiones
 entregas/
+
+# paquete de datos para los notebooks (se comparte aparte, ver README)
+mineria_youtube_datos.zip
