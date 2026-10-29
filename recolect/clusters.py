@@ -110,7 +110,7 @@ def cluster_current(data_dir="data", representation="text") -> None:
     from .mapping import load_base_vectors, load_current, maps_dir
     from .received import ReceivedStore, store_path
 
-    meta, coords, _reducer = load_current(data_dir, representation)
+    meta, coords, _ = load_current(data_dir, representation, with_reducer=False)
     base_ids, base_vectors = load_base_vectors(data_dir, representation)
     vector_of = dict(zip(base_ids, base_vectors))
     if representation == "text":

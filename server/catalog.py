@@ -204,7 +204,8 @@ class VideoCatalog:
         if current_info(self.data_dir, "image") is None:
             print("[catálogo] sin mapa de miniaturas; calcúlalo con: python3 remap.py --rep image", flush=True)
             return
-        meta, coords, _reducer = load_current(self.data_dir, "image")
+        # Las imágenes se ubican por sus vecinos, así que el molde UMAP de este mapa no se usa
+        meta, coords, _ = load_current(self.data_dir, "image", with_reducer=False)
         ids, vectors = load_base_vectors(self.data_dir, "image")
         coords = coords.set_index("youtube_id").reindex(ids)
         keep = coords["x"].notna().to_numpy()

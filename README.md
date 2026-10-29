@@ -24,9 +24,9 @@ data/                  # todo lo generado (no se versiona, salvo data/metricas.c
 
 ## Por dónde empezar
 
-1. Prepara el entorno (sección siguiente) y consigue los datos: pide el paquete `mineria_youtube_datos.zip` (~320 MB) y descomprímelo en la raíz del repo con `unzip mineria_youtube_datos.zip`, o corre `python3 recolect.py` (varias horas).
+1. Prepara el entorno (sección siguiente) y consigue los datos: pide el paquete `mineria_youtube_datos.zip` (~650 MB) y descomprímelo en la raíz del repo con `unzip mineria_youtube_datos.zip`, o corre `python3 recolect.py` (varias horas).
 2. Lee los notebooks en orden: solo leen lo que dejó el pipeline, no recalculan nada pesado.
-3. Levanta el servidor (`uvicorn server.app:app --port 8000`) y abre `http://127.0.0.1:8000`.
+3. Levanta el servidor (`uvicorn server.app:app --port 8000`) y abre `http://127.0.0.1:8000`. Con el paquete basta para explorar el mapa, buscar conceptos e imágenes y consultar los videos que ya están en el catálogo. Para agregar videos o perfiles nuevos hace falta `YOUTUBE_API_KEY` en `.env`. La primera vez se descarga EmbeddingGemma desde Hugging Face; si pide aceptar la licencia de Gemma, hay que aceptarla con tu cuenta y correr `huggingface-cli login`.
 
 ## Recolección
 
@@ -98,7 +98,7 @@ python3 -m recolect.avance
 
 Los notebooks guardan sus figuras en `informe/figs/` solo si se cambia `GUARDAR_FIGS = True` en su primera celda.
 
-Para compartir los datos sin que el resto tenga que correr `recolect.py`, `python3 -m analysis.paquete` arma `mineria_youtube_datos.zip` (~320 MB). Trae solo lo que leen los notebooks, con los embeddings en float16: los resultados no cambian (hit@k igual a 4 decimales). No incluye las miniaturas, porque los notebooks bajan de YouTube las que muestran, ni el molde UMAP del servidor; para levantar la web hace falta `data/` completo.
+Para compartir los datos sin que el resto tenga que correr `recolect.py`, `python3 -m analysis.paquete` arma `mineria_youtube_datos.zip` (~650 MB). Trae lo que leen los notebooks y el servidor, con los embeddings en float16: los resultados no cambian (hit@k igual a 4 decimales). La mitad del peso es el molde UMAP del mapa de texto, que el servidor usa para ubicar videos nuevos. No incluye las miniaturas: los notebooks y el servidor bajan de YouTube las que necesitan. Cuando faltan `emb_text.parquet` y `emb_image.parquet`, el servidor toma los vectores del consolidado.
 
 ## Mapa 3D guardado y recálculo
 
