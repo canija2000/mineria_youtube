@@ -19,9 +19,10 @@ notebooks/             # exploración guiada, en orden:
   05_clustering_hdbscan    grupos del mapa y su bautizo zero-shot
 informe/               # informe en LaTeX (main.tex) y sus figuras
 docs/estado.md         # estado actual del proyecto y próximos pasos
+docs/despliegue_cloud_run.md     # cómo publicar la web en Google Cloud Run (se apaga sin visitas)
 docs/despliegue_oracle.md        # cómo publicar la web en una VM gratis de Oracle Cloud
 docs/despliegue_huggingface.md   # cómo publicar la web en un Space (requiere HF PRO)
-deploy/                # scripts de despliegue (oracle/: arranque y Caddy; Space de HF)
+deploy/                # scripts de despliegue (cloudrun/: imagen con datos y modelo; oracle/: arranque y Caddy; Space de HF)
 Dockerfile             # imagen del servidor + web (requirements-server.txt, versiones fijas)
 data/                  # todo lo generado (no se versiona, salvo data/metricas.csv)
 ```
@@ -149,7 +150,7 @@ docker run -p 8000:8000 -v "$PWD/data:/app/data" --env-file .env mapa-youtube
 
 Variables: `YOUTUBE_API_KEY` (para agregar videos y perfiles), `DATA_URL` (opcional), `HF_TOKEN` (si el modelo lo pide) y `PORT` (la definen Railway y otros; por defecto 8000). El servidor usa ~1,5–3 GB de RAM.
 
-Para publicarla en una máquina gratis de Oracle Cloud (con Caddy y HTTPS), ver [docs/despliegue_oracle.md](docs/despliegue_oracle.md). La guía de Hugging Face Spaces ([docs/despliegue_huggingface.md](docs/despliegue_huggingface.md)) sigue disponible, pero los Spaces con Docker ahora requieren la suscripción PRO.
+Para publicarla en Google Cloud Run, que la apaga sin visitas y con poco tráfico queda en el nivel gratuito, ver [docs/despliegue_cloud_run.md](docs/despliegue_cloud_run.md) (`deploy/cloudrun/desplegar.sh`). Para una máquina gratis de Oracle Cloud (con Caddy y HTTPS), ver [docs/despliegue_oracle.md](docs/despliegue_oracle.md). La guía de Hugging Face Spaces ([docs/despliegue_huggingface.md](docs/despliegue_huggingface.md)) sigue disponible, pero los Spaces con Docker ahora requieren la suscripción PRO.
 
 ## API y web
 
