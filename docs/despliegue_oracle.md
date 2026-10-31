@@ -39,6 +39,7 @@ En la consola: **☰ → Compute → Instances → Create instance**.
 | Advanced options → Capacity type | **On-demand capacity** (el que viene). *Preemptible* no: Oracle puede apagarla cuando quiera |
 | Shape (**primero**) | *Change shape* → **Ampere** → `VM.Standard.A1.Flex`, **2 OCPU / 12 GB** (alcanza de sobra; el máximo gratis es 4/24) |
 | Image (**después**) | *Change image* → **Canonical Ubuntu 24.04**, la normal, no la *Minimal*. Con la shape Ampere ya elegida, Oracle usa sola la versión aarch64. Si eliges la imagen antes que la shape, aparece un aviso de imagen incompatible |
+| Security | todo apagado (*Shielded instance* y *Confidential computing*). El aviso de que no se puede activar *confidential computing* es normal con Ampere |
 | Networking | *Create new virtual cloud network* + *public subnet*, con **Assign a public IPv4 address** marcado |
 | Add SSH keys | *Upload public key files* → `~/.ssh/oracle_mapa.pub` |
 | Boot volume | *Specify a custom boot volume size* → **100 GB** (el gratis llega a 200 GB en total) |
