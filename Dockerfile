@@ -20,6 +20,10 @@ COPY server/ server/
 COPY web/ web/
 COPY remap.py .
 
+# Hugging Face Spaces corre el contenedor como uid 1000 (no root): la carpeta de datos
+# tiene que existir y ser escribible para que se puedan descargar datos y modelo.
+RUN mkdir -p /app/data && chmod -R 777 /app/data
+
 EXPOSE 8000
 # Railway (y otros) definen PORT; en local queda en 8000
 CMD ["sh", "-c", "python -m server.datos && exec uvicorn server.app:app --host 0.0.0.0 --port ${PORT:-8000}"]

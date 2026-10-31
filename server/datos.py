@@ -1,7 +1,8 @@
 """Descarga el paquete de datos al arrancar, si `data/` está vacío (pensado para Docker / Railway).
 
 El paquete es el zip de `analysis/paquete.py`. Se baja desde `DATA_URL` (cualquier enlace de
-descarga directa) y se descomprime en `MAPA_DATA` (por defecto `data/`). Si ya hay un mapa,
+descarga directa; si es un Dataset privado de Hugging Face, usa `HF_TOKEN`) y se descomprime
+en `MAPA_DATA` (por defecto `data/`). Si ya hay un mapa,
 no hace nada, así que en un volumen persistente solo descarga la primera vez.
 
 Uso:
@@ -26,10 +27,15 @@ def main():
         sys.exit(f"[datos] {data}/ está vacío y no hay DATA_URL: monta los datos o define DATA_URL "
                  "con un enlace al paquete (python3 -m analysis.paquete)")
 
+    # Un Dataset privado de Hugging Face pide el token; los enlaces públicos no lo necesitan
+    headers = {}
+    if "huggingface.co" in url and os.getenv("HF_TOKEN"):
+        headers["Authorization"] = f"Bearer {os.environ['HF_TOKEN']}"
+
     data.mkdir(parents=True, exist_ok=True)
     with tempfile.NamedTemporaryFile(suffix=".zip", dir=data) as tmp:
         print(f"[datos] descargando el paquete en {data}/ ...", flush=True)
-        with requests.get(url, stream=True, timeout=60) as resp:
+        with requests.get(url, stream=True, timeout=60, headers=headers) as resp:
             resp.raise_for_status()
             for chunk in resp.iter_content(chunk_size=1 << 20):
                 tmp.write(chunk)

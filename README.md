@@ -19,6 +19,9 @@ notebooks/             # exploración guiada, en orden:
   05_clustering_hdbscan    grupos del mapa y su bautizo zero-shot
 informe/               # informe en LaTeX (main.tex) y sus figuras
 docs/estado.md         # estado actual del proyecto y próximos pasos
+docs/despliegue_huggingface.md   # cómo publicar la web en un Space
+deploy/                # README del Space y script para subirlo
+Dockerfile             # imagen del servidor + web (requirements-server.txt, versiones fijas)
 data/                  # todo lo generado (no se versiona, salvo data/metricas.csv)
 ```
 
@@ -144,6 +147,8 @@ docker run -p 8000:8000 -v "$PWD/data:/app/data" --env-file .env mapa-youtube
 ```
 
 Variables: `YOUTUBE_API_KEY` (para agregar videos y perfiles), `DATA_URL` (opcional), `HF_TOKEN` (si el modelo lo pide) y `PORT` (la definen Railway y otros; por defecto 8000). El servidor usa ~1,5–3 GB de RAM.
+
+Para publicarla en Hugging Face Spaces, ver [docs/despliegue_huggingface.md](docs/despliegue_huggingface.md) (`deploy/subir_space.py` crea el Space y sube el código).
 
 ## API y web
 
