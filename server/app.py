@@ -97,7 +97,9 @@ def get_map(rep: str = "text"):
     return catalog.map_payload(representation=rep)
 
 
-def _encode_video_thumbnail(video_id: str, embedder: TextEmbedder):
+def _save_thumbnail(video_id: str) -> Path:
+    """Guarda la miniatura del video en data/thumbs/ (las de los videos ingresados sí se conservan;
+    lo que no se guarda son las imágenes sueltas de /images)."""
     import requests
     thumb_dir = Path(os.getenv("MAPA_DATA", "data")) / "thumbs"
     thumb_dir.mkdir(parents=True, exist_ok=True)
@@ -106,6 +108,23 @@ def _encode_video_thumbnail(video_id: str, embedder: TextEmbedder):
         resp = requests.get(f"https://i.ytimg.com/vi/{video_id}/mqdefault.jpg", timeout=15)
         resp.raise_for_status()
         thumb_path.write_bytes(resp.content)
+    return thumb_path
+
+
+def _register_video(video_id: str, metadata: dict, catalog: VideoCatalog) -> None:
+    """Agrega al catálogo un video que llega por primera vez: metadatos, vector de texto y miniatura."""
+    if catalog.has(video_id):
+        return
+    vector = app.state.embedder.encode([build_text(metadata)])[0]
+    catalog.add(video_id, metadata, vector)
+    try:
+        _save_thumbnail(video_id)
+    except Exception as exc:  # sin miniatura el video igual queda en el catálogo
+        print(f"[miniatura] no se pudo guardar la de {video_id}: {exc}", flush=True)
+
+
+def _encode_video_thumbnail(video_id: str, embedder: TextEmbedder):
+    thumb_path = _save_thumbnail(video_id)
     embedder.enable_images()
     return embedder.encode([{"image": [str(thumb_path)]}], batch_size=1, prompt_name=None)[0]
 
@@ -124,6 +143,7 @@ def add_video(payload: AddVideoRequest):
             metadata = catalog.metadata.get(video_id) or fetch_video(video_id)
             if metadata is None:
                 raise HTTPException(status_code=404, detail="El video no existe o no está disponible")
+            _register_video(video_id, metadata, catalog)   # queda guardado igual que en modo texto
             img_vec = _encode_video_thumbnail(video_id, app.state.embedder)
             return catalog.describe_image(video_id, metadata=metadata, image_vector=img_vec)
         except HTTPException:
@@ -137,8 +157,8 @@ def add_video(payload: AddVideoRequest):
         metadata = fetch_video(video_id)
         if metadata is None:
             raise HTTPException(status_code=404, detail="El video no existe o no está disponible")
-        vector = app.state.embedder.encode([build_text(metadata)])[0]
-        return catalog.add(video_id, metadata, vector)
+        _register_video(video_id, metadata, catalog)
+        return catalog.describe(video_id)
     except HTTPException:
         raise
     except Exception as exc:
