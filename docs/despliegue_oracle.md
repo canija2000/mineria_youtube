@@ -27,9 +27,14 @@ ssh-keygen -t ed25519 -f ~/.ssh/oracle_mapa -C "mapa-youtube"
 
 Se crean dos archivos: `~/.ssh/oracle_mapa`, que es privado y no se comparte, y `~/.ssh/oracle_mapa.pub`, que se sube a Oracle.
 
-## 3. Crear la máquina virtual
+## 3. Crear la red y la máquina virtual
 
-En la consola: **☰ → Compute → Instances → Create instance**.
+**Primero la red.** ⚠️ Si la red se crea desde el formulario de la instancia, la consola no deja activar la IP pública. Por eso se crea antes, con su asistente:
+
+1. Ve a **☰ → Networking → Virtual cloud networks → Actions → Start VCN Wizard → Create VCN with Internet Connectivity**.
+2. Ponle de nombre `vcn-mapa`, deja el resto por defecto y elige **Next → Create**. Se crean la subred pública, el *internet gateway* y las rutas.
+
+**Después la máquina:** **☰ → Compute → Instances → Create instance**.
 
 | campo | valor |
 |---|---|
@@ -40,8 +45,8 @@ En la consola: **☰ → Compute → Instances → Create instance**.
 | Shape (**primero**) | *Change shape* → **Ampere** → `VM.Standard.A1.Flex`, **2 OCPU / 12 GB** (alcanza de sobra; el máximo gratis es 4/24) |
 | Image (**después**) | *Change image* → **Canonical Ubuntu 24.04**, la normal, no la *Minimal*. Con la shape Ampere ya elegida, Oracle usa sola la versión aarch64. Si eliges la imagen antes que la shape, aparece un aviso de imagen incompatible |
 | Security | todo apagado (*Shielded instance* y *Confidential computing*). El aviso de que no se puede activar *confidential computing* es normal con Ampere |
-| Networking | *Create new virtual cloud network* + *public subnet*, con **Assign a public IPv4 address** marcado |
-| Add SSH keys | *Upload public key files* → `~/.ssh/oracle_mapa.pub` |
+| Networking | **Select existing virtual cloud network** → `vcn-mapa`; subnet: la **pública**; **Automatically assign public IPv4 address** activado |
+| Add SSH keys | *Upload public key file* → `~/.ssh/oracle_mapa.pub`. Otra opción: *Generate a key pair for me* y **Download private key** antes de crear la instancia (solo se muestra una vez); guárdala como `~/.ssh/oracle_mapa` con `chmod 600` |
 | Boot volume | *Specify a custom boot volume size* → **100 GB** (el gratis llega a 200 GB en total) |
 
 Pulsa **Create** y anota la **Public IP address** que aparece cuando el estado pasa a *Running*.
