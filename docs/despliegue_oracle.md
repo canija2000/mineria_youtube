@@ -34,6 +34,9 @@ En la consola: **☰ → Compute → Instances → Create instance**.
 | campo | valor |
 |---|---|
 | Name | `mapa-youtube` |
+| Create in compartment | el que viene (`<tu-usuario> (root)`) |
+| Placement → Availability domain | **AD 1**. Si al crear dice *Out of capacity*, vuelve y prueba AD 2 o AD 3 |
+| Advanced options → Capacity type | **On-demand capacity** (el que viene). *Preemptible* no: Oracle puede apagarla cuando quiera |
 | Image | **Canonical Ubuntu 24.04**. Con la *shape* ARM elige sola la versión aarch64 |
 | Shape | *Change shape* → **Ampere** → `VM.Standard.A1.Flex`, **2 OCPU / 12 GB** (alcanza de sobra; el máximo gratis es 4/24) |
 | Networking | *Create new virtual cloud network* + *public subnet*, con **Assign a public IPv4 address** marcado |
