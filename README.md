@@ -130,6 +130,21 @@ Para dejarlo como rutina, por ejemplo cada noche a las 3:00 con `crontab -e`:
 0 3 * * * cd /ruta/a/mineria_youtube && .venv/bin/python remap.py --min-new 50 >> data/remap.log 2>&1
 ```
 
+## Docker (servidor + web)
+
+La imagen trae el código y las dependencias con versiones fijas (`requirements-server.txt`, torch solo-CPU), así el servidor corre igual en cualquier máquina. No incluye datos ni modelo:
+
+- **Datos:** se montan en `/app/data`. Si la carpeta está vacía y está definida `DATA_URL` (un enlace de descarga directa al paquete de `python3 -m analysis.paquete`), `server/datos.py` lo descarga y descomprime al arrancar.
+- **Modelo:** EmbeddingGemma se baja de Hugging Face la primera vez y queda en `/app/data/hf`. Si el modelo pide aceptar la licencia de Gemma, hay que pasar `HF_TOKEN` de una cuenta que la haya aceptado.
+- **Persistencia:** con un volumen en `/app/data`, los videos que llegan por la web (SQLite) y sus miniaturas (`data/thumbs/`) sobreviven a los reinicios. Sin volumen se pierden al redeployar.
+
+```bash
+docker build -t mapa-youtube .
+docker run -p 8000:8000 -v "$PWD/data:/app/data" --env-file .env mapa-youtube
+```
+
+Variables: `YOUTUBE_API_KEY` (para agregar videos y perfiles), `DATA_URL` (opcional), `HF_TOKEN` (si el modelo lo pide) y `PORT` (la definen Railway y otros; por defecto 8000). El servidor usa ~1,5–3 GB de RAM.
+
 ## API y web
 
 El backend está en `server/app.py` y sirve también la web (`web/index.html`) en la raíz. Recibe un ID o URL de YouTube, consulta metadatos, genera el embedding, busca vecinos y ubica el nuevo punto sobre el mapa guardado.
@@ -148,4 +163,4 @@ La API usa `emb_text.parquet`, `emb_image.parquet`, `emb_vocab.parquet`, `yt8m_h
 - `POST /profiles` toma un `@handle`, canal o playlist, embebe sus últimos videos y mide qué tan concentrados están en el mapa.
 - `GET /health` indica la versión del mapa y cuántos videos recibidos aún no están incluidos en él.
 
-Los videos recibidos por `/videos` se guardan en `webapp_catalog.sqlite3`.
+Los videos recibidos por `/videos` se guardan en `webapp_catalog.sqlite3` (metadatos y vector de texto) y su miniatura en `data/thumbs/`, sin importar si se buscaron en modo texto o imagen. Las imágenes sueltas de `/images` no se guardan. Hacer clic en un punto del mapa abre su panel sin guardar nada nuevo.

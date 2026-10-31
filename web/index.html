@@ -932,13 +932,35 @@ function showTip(i) {
   tip.style.left = (x + 14) + 'px'; tip.style.top = (y - 10) + 'px'; tip.style.display = 'block';
 }
 const ray = new THREE.Raycaster(); ray.params.Points.threshold = 0.22;
-renderer.domElement.addEventListener('mousemove', e => {
+function pointUnder(e) {
   const r = renderer.domElement.getBoundingClientRect();
   ray.setFromCamera({ x: (e.clientX - r.left) / r.width * 2 - 1, y: -(e.clientY - r.top) / r.height * 2 + 1 }, camera);
   const hit = ray.intersectObject(base)[0];
-  if (hit) showTip(hit.index); else tip.style.display = 'none';
+  return hit ? hit.index : null;
+}
+renderer.domElement.addEventListener('mousemove', e => {
+  const i = pointUnder(e);
+  if (i !== null) showTip(i); else tip.style.display = 'none';
+  renderer.domElement.style.cursor = i !== null ? 'pointer' : '';
 });
 renderer.domElement.addEventListener('mouseleave', () => { tip.style.display = 'none'; });
+
+// Clic en un punto: abre su panel (como "Explorar"). Arrastrar para rotar no cuenta como clic.
+// Los videos del mapa ya están en el catálogo, así que no gastan cuota de la API ni se guardan de nuevo.
+let pressAt = null;
+renderer.domElement.addEventListener('pointerdown', e => { pressAt = { x: e.clientX, y: e.clientY, t: performance.now() }; });
+renderer.domElement.addEventListener('pointerup', e => {
+  if (!pressAt) return;
+  const moved = Math.hypot(e.clientX - pressAt.x, e.clientY - pressAt.y);
+  const quick = performance.now() - pressAt.t < 400;
+  pressAt = null;
+  if (moved > 5 || !quick) return;
+  const i = pointUnder(e);
+  if (i !== null && D.ids[i]) {
+    tip.style.display = 'none';
+    selectVideoById(D.ids[i]);
+  }
+});
 
 // Modo de entrada con memoria independiente por pestaña (Video / Imagen / Concepto / Perfil)
 let mode = 'video';
