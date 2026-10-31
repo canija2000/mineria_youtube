@@ -40,9 +40,11 @@ deploy/cloudrun/desplegar.sh <ID-del-proyecto>
 El script:
 
 1. arma `build/cloudrun/` con `preparar.sh`, sin tocar el repo (`build/` está en `.gitignore`);
-2. lee `YOUTUBE_API_KEY` del `.env`, sin mostrarla;
-3. corre `gcloud run deploy --source`: sube el contexto (~2 GB) y **Cloud Build** construye la imagen en la nube, para linux/amd64 como pide Cloud Run, así que no hay que construirla en el Mac;
-4. la publica con 2 CPU, 8 GB de RAM, entre 0 y 1 instancias y acceso público. El contenedor usa ~5,3 GB porque en CPU el modelo vive en RAM; con 4 GB muere por falta de memoria.
+2. crea, si no existe, el bucket `<ID-del-proyecto>-mapa-persistente` y le da permiso al servicio para escribir en él (ver sección 3);
+3. lee `YOUTUBE_API_KEY` del `.env`, sin mostrarla;
+4. corre `gcloud run deploy --source`: sube el contexto (~2 GB) y **Cloud Build** construye la imagen en la nube, para linux/amd64 como pide Cloud Run, así que no hay que construirla en el Mac;
+5. la publica con 2 CPU, 8 GB de RAM, entre 0 y 1 instancias y acceso público, con el bucket montado en `/mnt/persistente`. El contenedor usa ~5,3 GB porque en CPU el modelo vive en RAM; con 4 GB muere por falta de memoria;
+6. fija una limpieza automática de imágenes viejas: quedan solo las 2 últimas (`deploy/cloudrun/limpieza.json`).
 
 La primera vez `gcloud` pregunta si crea el repositorio de imágenes (`cloud-run-source-deploy`): responde que sí. Todo toma ~10–20 minutos, sobre todo por la subida y la instalación de dependencias. Al final imprime la URL, del estilo `https://mapa-youtube-xxxxx-uc.a.run.app`.
 
@@ -66,25 +68,54 @@ Para **actualizar** después de cambiar código, se vuelve a correr el mismo com
 | `Billing account … is not enabled` / `PERMISSION_DENIED` al habilitar APIs | falta activar la facturación del proyecto (paso 0.1) |
 | el deploy falla en el *build* | el log de Cloud Build tiene el detalle: *Cloud Build → History* |
 | la web carga pero "No se pudo procesar el video: Falta YOUTUBE_API_KEY" | el `.env` no tenía la llave; agrégala y vuelve a desplegar |
+| `Permission denied` / `403` al escribir en `/mnt/persistente` | la cuenta de servicio no tiene permiso en el bucket; vuelve a correr el script, que lo asigna |
 
-## 3. Costos y límites
+## 3. Persistencia de los videos nuevos
 
-Los precios cambian; revisa la página de precios de Cloud Run. A la fecha de esta guía:
+Cada contenedor nace desde la imagen, así que lo que escribe se pierde cuando Cloud Run lo apaga o cuando se vuelve a desplegar. Para que los videos que la gente agrega no se pierdan, el script monta un **bucket de Cloud Storage** como carpeta (`/mnt/persistente`), y el servidor (`server/persistencia.py`):
+
+- **al arrancar**, trae de ahí el catálogo de videos recibidos (`webapp_catalog.sqlite3`). La primera vez lo siembra con el que viene en la imagen;
+- **después de cada video nuevo**, deja ahí una copia del catálogo;
+- **guarda ahí las miniaturas** de los videos ingresados (`thumbs/`).
+
+El catálogo no se usa directo sobre el bucket, porque esos montajes no manejan bien una base de datos SQLite; se copia completo, y pesa pocos MB. Funciona porque hay una sola instancia (`--max-instances 1`): nunca hay dos contenedores escribiendo a la vez.
+
+Para ver lo guardado, en la consola entra a *Cloud Storage → Buckets → `<ID>-mapa-persistente`*, o desde la terminal:
+
+```bash
+gcloud storage ls -l gs://<ID-del-proyecto>-mapa-persistente/
+```
+
+En local no cambia nada: sin la variable `MAPA_PERSISTENTE` todo queda en `data/`.
+
+## 4. Costos: qué se cobra y dónde verlo
+
+**Dónde mirar:**
+
+- ***Billing → Reports*:** el gasto del mes. Filtra por el proyecto y agrupa por *Service* para ver cuánto va de Cloud Run, Artifact Registry, Cloud Storage, etc. El uso dentro del nivel gratuito aparece, pero sin cobro.
+- ***Billing → Overview*:** el total del mes y, si activaste la prueba gratuita de Google Cloud, los créditos que te quedan.
+- ***Billing → Budgets & alerts*:** el presupuesto con alerta por correo (paso 0.1). Es lo más útil para no llevarse sorpresas.
+- ***Cloud Run → mapa-youtube → Metrics*:** cuántas instancias hubo y el *Billable container instance time*. Con eso calculas cuánto del nivel gratuito vas usando.
+
+Los reportes de facturación se actualizan con algunas horas de retraso.
+
+**Qué se cobra.** Los precios cambian; revisa la página de precios de Cloud Run. A la fecha de esta guía:
 
 - **Nivel gratuito de Cloud Run** (por mes, en regiones como `us-central1`):
   - 180.000 vCPU-segundos, 360.000 GiB-segundos y 2 millones de pedidos.
   - Con 2 CPU y 8 GB lo que se agota primero es la memoria: **~12 horas de uso activo al mes**. Una demo con visitas esporádicas suele quedar adentro.
   - Solo se cobra mientras se atienden pedidos, y sin visitas la instancia se apaga.
-- **Imagen guardada** (Artifact Registry): pesa ~3–4 GB comprimida; después de los primeros 0,5 GB gratis son ~0,10 USD por GB al mes, así que **~0,30 USD/mes**.
+- **Imagen guardada** (Artifact Registry): pesa ~3–4 GB comprimida; después de los primeros 0,5 GB gratis son ~0,10 USD por GB al mes. Con la limpieza que deja 2 imágenes, **~0,60 USD/mes** como máximo.
+- **Bucket** (Cloud Storage): unos pocos MB de catálogo y miniaturas, dentro de los 5 GB gratis.
+- **Salida de datos a internet:** cada carga del mapa son ~2–3 MB. Hay una cuota gratuita mensual; con una demo no debería notarse.
 - **Cloud Build:** cada deploy usa algunos minutos de build, dentro de la cuota gratuita diaria.
-- **No hay disco persistente.** Los videos que la gente agrega por la web y sus miniaturas viven solo mientras la instancia está despierta; al apagarse se pierden. El mapa base, que va dentro de la imagen, siempre está.
-- **`--max-instances 1`** acota el gasto. Además cada instancia tendría su propio catálogo, así que con más de una los usuarios verían cosas distintas.
+- **`--max-instances 1`** acota el gasto, y es lo que hace segura la persistencia: un solo contenedor escribe el catálogo.
 - **La cuota de la API de YouTube es tuya.** Como la URL es pública, cualquiera puede gastarla agregando videos o perfiles.
 
-## 4. Bajar el servicio
+## 5. Bajar el servicio
 
 ```bash
 gcloud run services delete mapa-youtube --region us-central1 --project <ID-del-proyecto>
 ```
 
-Las imágenes quedan en *Artifact Registry → cloud-run-source-deploy*; bórralas ahí para no pagar su almacenamiento.
+Las imágenes quedan en *Artifact Registry → cloud-run-source-deploy* y los videos guardados en el bucket `<ID>-mapa-persistente`. Bórralos ahí para no pagar su almacenamiento.

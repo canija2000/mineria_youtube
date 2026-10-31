@@ -16,6 +16,7 @@ from starlette.staticfiles import StaticFiles
 
 from recolect.embedding import TextEmbedder, build_text
 from recolect.youtube import fetch_profile_videos, fetch_video
+from . import persistencia
 from .catalog import VideoCatalog
 
 VIDEO_ID_RE = re.compile(r"^[A-Za-z0-9_-]{11}$")
@@ -44,7 +45,9 @@ class ProfileRequest(BaseModel):
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # MAPA_DATA=data/dev permite probar el servidor con los datos del modo prueba.
-    app.state.catalog = VideoCatalog(os.getenv("MAPA_DATA", "data"))
+    data_dir = os.getenv("MAPA_DATA", "data")
+    persistencia.restaurar(data_dir)   # en Cloud Run: trae los videos recibidos guardados en el bucket
+    app.state.catalog = VideoCatalog(data_dir)
     app.state.embedder = TextEmbedder()
     yield
 
@@ -101,7 +104,7 @@ def _save_thumbnail(video_id: str) -> Path:
     """Guarda la miniatura del video en data/thumbs/ (las de los videos ingresados sí se conservan;
     lo que no se guarda son las imágenes sueltas de /images)."""
     import requests
-    thumb_dir = Path(os.getenv("MAPA_DATA", "data")) / "thumbs"
+    thumb_dir = persistencia.carpeta_miniaturas(os.getenv("MAPA_DATA", "data"))
     thumb_dir.mkdir(parents=True, exist_ok=True)
     thumb_path = thumb_dir / f"{video_id}.jpg"
     if not thumb_path.exists() or thumb_path.stat().st_size <= 1000:
@@ -117,6 +120,7 @@ def _register_video(video_id: str, metadata: dict, catalog: VideoCatalog) -> Non
         return
     vector = app.state.embedder.encode([build_text(metadata)])[0]
     catalog.add(video_id, metadata, vector)
+    persistencia.guardar(os.getenv("MAPA_DATA", "data"))
     try:
         _save_thumbnail(video_id)
     except Exception as exc:  # sin miniatura el video igual queda en el catálogo
