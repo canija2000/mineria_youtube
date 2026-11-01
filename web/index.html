@@ -848,6 +848,27 @@ async function loadServerMap(rep = 'text') {
 }
 loadServerMap('text');
 
+// Tras agregar un video o un perfil: si el catálogo de texto creció, recarga los puntos para que
+// el contador y el mapa base los muestren, sin borrar el resultado que se está viendo.
+async function refreshAfterAdd() {
+  try {
+    const res = await fetch(API_BASE + '/health');
+    if (!res.ok) return;
+    const total = (await res.json()).videos;
+    const countEl = document.getElementById('count-text');
+    if (currentRepresentation !== 'text') {
+      if (countEl) countEl.textContent = total.toLocaleString('es-CL');
+      return;
+    }
+    if (total === D.ids.length) return;
+    const mapRes = await fetch(`${API_BASE}/map?rep=text`);
+    if (!mapRes.ok || currentRepresentation !== 'text') return;
+    const opacity = base.material.opacity;   // el resultado atenúa el mapa base: se conserva
+    applyMapPayload(await mapRes.json(), 'text');
+    base.material.opacity = opacity;
+  } catch (e) { /* el contador se pondrá al día con la próxima carga del mapa */ }
+}
+
 async function switchRepresentation(rep) {
   if (rep !== 'text' && rep !== 'image') return;
   if (currentRepresentation === rep) return;
@@ -1696,6 +1717,7 @@ async function runRealVideo(query) {
       document.getElementById('loading').classList.remove('on');
       const targetPos = showRealVideoResult(data);
       setCamera(targetPos, 16);
+      refreshAfterAdd();
     }, 300);
   } catch (err) {
     clearInterval(timer);
@@ -1993,6 +2015,7 @@ async function runRealProfile(query) {
     document.getElementById('loading').classList.remove('on');
     const targetPos = showRealProfileResult(data);
     setCamera(targetPos, 24);
+    if ((data.profile || {}).added_videos) refreshAfterAdd();
   } catch (err) {
     clearInterval(timer);
     document.getElementById('loading').classList.remove('on');

@@ -43,14 +43,25 @@ def _normalize(matrix: np.ndarray) -> np.ndarray:
 
 
 def folksonomy(ids: list[str], vectors: np.ndarray, data_dir) -> tuple[np.ndarray, np.ndarray]:
-    """Prototipo de cada tag frecuente: el centroide de los videos que lo usan (8–800 videos)."""
+    """Prototipo de cada tag frecuente: el centroide de los videos que lo usan (8–800 videos).
+
+    Usa los tags de los videos base y también los de los recibidos por la web: así un tema que
+    llegó después (p. ej. canales de matemáticas) puede nombrar su grupo con sus propios tags.
+    """
+    from .received import ReceivedStore, store_path
+
     position = {video_id: i for i, video_id in enumerate(ids)}
     tags = pd.read_parquet(Path(data_dir) / "yt8m_hydrated.parquet", columns=["youtube_id", "tags"])
+    pairs = list(zip(tags["youtube_id"], tags["tags"]))
+    if store_path(data_dir).exists():
+        pairs += [(r["youtube_id"], r["metadata"].get("tags")) for r in ReceivedStore(store_path(data_dir)).all()]
     rows_of = defaultdict(list)
-    for video_id, video_tags in zip(tags["youtube_id"], tags["tags"]):
+    seen = set()
+    for video_id, video_tags in pairs:
         i = position.get(video_id)
-        if i is None or not isinstance(video_tags, (list, np.ndarray)):
+        if i is None or i in seen or not isinstance(video_tags, (list, np.ndarray)):
             continue
+        seen.add(i)
         for tag in {str(t).strip().lower() for t in video_tags}:
             if 3 <= len(tag) <= 28 and tag not in GENERIC_TAGS and not tag.isdigit():
                 rows_of[tag].append(i)
