@@ -7,6 +7,9 @@ PROYECTO="${1:?falta el id del proyecto de Google Cloud}"
 REGION="${2:-us-central1}"   # región del nivel gratuito de Cloud Run
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 BUCKET="${PROYECTO}-mapa-persistente"
+# Se suben ~2 GB (sobre todo el modelo); con el límite por defecto de gcloud (300 s) la subida
+# se corta en conexiones lentas con "ReadTimeout". 1800 s = 30 minutos.
+export CLOUDSDK_CORE_HTTP_TIMEOUT=1800
 
 "$ROOT/deploy/cloudrun/preparar.sh"
 

@@ -68,6 +68,7 @@ Para **actualizar** después de cambiar código, se vuelve a correr el mismo com
 | `Billing account … is not enabled` / `PERMISSION_DENIED` al habilitar APIs | falta activar la facturación del proyecto (paso 0.1) |
 | el deploy falla en el *build* | el log de Cloud Build tiene el detalle: *Cloud Build → History* |
 | la web carga pero "No se pudo procesar el video: Falta YOUTUBE_API_KEY" | el `.env` no tenía la llave; agrégala y vuelve a desplegar |
+| `gcloud crashed (ReadTimeout) … storage.googleapis.com … read timeout=300` | la subida de ~2 GB tardó más que el límite de gcloud; el script ya lo sube a 30 min (`CLOUDSDK_CORE_HTTP_TIMEOUT`). Si vuelve a pasar, reintenta con una conexión más estable |
 | `Permission denied` / `403` al escribir en `/mnt/persistente` | la cuenta de servicio no tiene permiso en el bucket; vuelve a correr el script, que lo asigna |
 
 ## 3. Persistencia de los videos nuevos
