@@ -1113,7 +1113,7 @@ const STEPS = {
   video: [['Leyendo metadatos', 'API de YouTube'], ['Descargando miniatura', 'i.ytimg.com'], ['Codificando representación', 'EmbeddingGemma 2'], ['Proyectando en el mapa', 'UMAP 3D'], ['Buscando vecinos', 'k = 12']],
   image: [['Leyendo imagen en memoria', 'sin guardar en BDD'], ['Normalizando a 320×180 RGB', '70 tokens visuales'], ['Embedding visual', 'EmbeddingGemma 2'], ['Ubicando en espacio visual', 'UMAP 3D (k = 12)']],
   concept: [['Codificando concepto', 'EmbeddingGemma 2'], ['Calculando similitud coseno', 'espacio 768-d'], ['Delimitando región 3D', 'centroide UMAP'], ['Clasificando vecindario', 'kNN']],
-  profile: [['Resolviendo canal / playlist', 'API de YouTube'], ['Hidratando últimos videos', 'hasta 40 videos'], ['Embedding en lote', 'EmbeddingGemma 2'], ['Calculando centroide del canal', 'UMAP 3D']],
+  profile: [['Resolviendo canal / playlist', 'API de YouTube'], ['Hidratando videos', 'hasta 40 videos'], ['Embedding en lote', 'EmbeddingGemma 2'], ['Calculando centroide', 'UMAP 3D']],
 };
 function loading(m, at = 2) {
   const titles = { video: 'Ubicando video', concept: 'Ubicando concepto en el mapa', profile: 'Ubicando perfil' };
@@ -1316,9 +1316,10 @@ function switchNeighborTab(tab) {
   if (btnFar) btnFar.className = isFar ? 'on-far' : '';
   if (subhint) {
     const isProfile = currentRenderer === showRealProfileResult;
+    const de = isProfile && (currentVideoData.profile || {}).kind === 'playlist' ? 'de la playlist' : 'del canal';
     subhint.innerHTML = isFar
-      ? `<span>Menor similitud · ${isProfile ? 'distantes del canal' : 'fuera de la burbuja'}</span><span>d = 1 − sim</span>`
-      : `<span>${isProfile ? 'Mayor afinidad con el centroide del canal' : 'Mayor similitud coseno (768-d)'}</span><span>d = 1 − sim</span>`;
+      ? `<span>Menor similitud · ${isProfile ? `distantes ${de}` : 'fuera de la burbuja'}</span><span>d = 1 − sim</span>`
+      : `<span>${isProfile ? `Mayor afinidad con el centroide ${de}` : 'Mayor similitud coseno (768-d)'}</span><span>d = 1 − sim</span>`;
   }
   if (listEl) {
     listEl.innerHTML = renderNeighborCards(list, isFar);
@@ -1915,22 +1916,29 @@ function showRealProfileResult(data) {
   const nearCount = (data.neighbors || []).length;
   const farCount = (data._farthestList || []).length;
 
+  // Un canal (sus subidas) o una playlist pegada directo: cambia cómo se nombra en el panel
+  const isPlaylist = prof.kind === 'playlist';
+  const de = isPlaylist ? 'de la playlist' : 'del canal';
+  const cohesion = `Cohesión: <strong>${(prof.cohesion || 0.82).toFixed(2)}</strong>`;
+
   document.getElementById('right').innerHTML = `
     <section class="panel-card">
       <div class="vid">
         <div class="cat-header">
-          <h4>1 · Perfil / Canal analizado</h4>
+          <h4>1 · ${isPlaylist ? 'Playlist analizada' : 'Canal analizado'}</h4>
           <span class="cat-method">${nVids} videos${prof.added_videos ? ` · ${prof.added_videos} nuevos guardados` : ''}</span>
         </div>
         <div style="font:600 20px/1.25 'Newsreader', Georgia, serif;color:var(--text)">${prof.title || prof.query || 'Perfil'}</div>
-        ${prof.subscriber_count != null ? `<div class="channel-line">Suscriptores: <strong>${prof.subscriber_count.toLocaleString('es-CL')}</strong> · Cohesión: <strong>${(prof.cohesion || 0.82).toFixed(2)}</strong></div>` : ''}
+        ${isPlaylist
+          ? `<div class="channel-line">${prof.owner ? `Playlist de <strong>${prof.owner}</strong> · ` : ''}${cohesion}</div>`
+          : (prof.subscriber_count != null ? `<div class="channel-line">Suscriptores: <strong>${prof.subscriber_count.toLocaleString('es-CL')}</strong> · ${cohesion}</div>` : '')}
         ${prof.description ? `<div class="desc-box">${prof.description}</div>` : ''}
       </div>
     </section>
 
     <section class="panel-card">
       <div class="cat-header">
-        <h4>2 · Distribución del canal</h4>
+        <h4>2 · Distribución ${de}</h4>
         <span class="cat-method">${(knn.breakdown || []).length} de ${colorMode === 'cluster' ? `${D.cats.length} grupos` : `${prof.total_categories || D.cats.length} categorías`}</span>
       </div>
       ${knn.breakdown && knn.breakdown.length ? `
@@ -1969,15 +1977,15 @@ function showRealProfileResult(data) {
 
     <section class="panel-card">
       <div class="cat-header">
-        <h4>3 · Relacionados vs. distantes del canal</h4>
+        <h4>3 · Relacionados vs. distantes ${de}</h4>
       </div>
       ${HEATMAP_LEGEND_HTML}
       <div class="nb-tabs">
-        <button id="tab-near" class="on-near" onclick="switchNeighborTab('nearest')">Relacionados con el canal (${nearCount})</button>
-        <button id="tab-far" onclick="switchNeighborTab('farthest')">Distantes del canal (${farCount})</button>
+        <button id="tab-near" class="on-near" onclick="switchNeighborTab('nearest')">Relacionados ${isPlaylist ? 'con la playlist' : 'con el canal'} (${nearCount})</button>
+        <button id="tab-far" onclick="switchNeighborTab('farthest')">Distantes ${de} (${farCount})</button>
       </div>
       <div class="nb-subhint" id="nb-subhint">
-        <span>Mayor afinidad con el centroide del canal</span><span>d = 1 − sim</span>
+        <span>Mayor afinidad con el centroide ${de}</span><span>d = 1 − sim</span>
       </div>
       <div class="nb" id="nb-list">
         ${renderNeighborCards(data.neighbors || [], false)}

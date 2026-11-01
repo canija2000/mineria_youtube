@@ -189,7 +189,8 @@ def fetch_video(youtube_id):
 def fetch_profile_videos(query: str, max_videos: int = 40) -> tuple[dict, list[dict]] | None:
     """Resuelve un canal (@handle, URL de canal o playlist pública) y devuelve (perfil_meta, últimos_videos).
 
-    Costo de cuota: ~3 unidades (1 channels.list + 1 playlistItems.list + 1 videos.list).
+    Costo de cuota: ~3 unidades (1 channels.list o playlists.list + 1 playlistItems.list + 1 videos.list).
+    `kind` dice si se analizó un canal (sus subidas) o una playlist pedida directo.
     """
     from urllib.parse import parse_qs, unquote, urlparse
 
@@ -230,9 +231,29 @@ def fetch_profile_videos(query: str, max_videos: int = 40) -> tuple[dict, list[d
     else:
         handle = "@" + raw.lstrip("@")
 
-    profile_info = {"query": raw, "title": raw, "channel_id": None, "thumbnail_url": None, "subscriber_count": None}
+    profile_info = {"query": raw, "kind": "playlist", "title": raw, "channel_id": None, "thumbnail_url": None,
+                    "subscriber_count": None}
 
-    if not playlist_id:
+    if playlist_id:
+        # La playlist se pidió directo (no es la de subidos de un canal): su nombre y dueño (+1 unidad de cuota)
+        resp = yt.playlists().list(part="snippet,contentDetails", id=playlist_id, maxResults=1).execute(num_retries=2)
+        pl_item = (resp.get("items") or [None])[0]
+        if pl_item:
+            sn = pl_item.get("snippet", {})
+            thumbs = sn.get("thumbnails", {})
+            profile_info = {
+                "query": raw,
+                "kind": "playlist",
+                "playlist_id": playlist_id,
+                "title": sn.get("title") or raw,
+                "channel_id": sn.get("channelId"),
+                "owner": sn.get("channelTitle"),
+                "description": (sn.get("description") or "")[:300],
+                "thumbnail_url": next((thumbs[k]["url"] for k in ("high", "medium", "default") if k in thumbs), None),
+                "subscriber_count": None,
+                "video_count": (pl_item.get("contentDetails") or {}).get("itemCount"),
+            }
+    else:
         ch_item = None
         if channel_id:
             resp = yt.channels().list(part="snippet,contentDetails,statistics", id=channel_id, maxResults=1).execute(num_retries=2)
@@ -259,6 +280,7 @@ def fetch_profile_videos(query: str, max_videos: int = 40) -> tuple[dict, list[d
         playlist_id = (cd.get("relatedPlaylists") or {}).get("uploads") or ("UU" + cid[2:] if cid.startswith("UC") else None)
         profile_info = {
             "query": raw,
+            "kind": "channel",
             "channel_id": cid,
             "title": sn.get("title") or raw,
             "custom_url": sn.get("customUrl") or handle or "",
