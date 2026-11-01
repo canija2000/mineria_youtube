@@ -76,3 +76,26 @@ class ReceivedStore:
     def count(self) -> int:
         with closing(self._connect()) as db:
             return db.execute("SELECT COUNT(*) FROM received").fetchone()[0]
+
+    def merge_from(self, other_path) -> int:
+        """Agrega los videos de otro catálogo que aquí no están (nunca borra ni pisa). Devuelve cuántos entraron.
+
+        Sirve para juntar el catálogo de Cloud Run (bucket) con el local antes de recalcular el mapa.
+        """
+        with closing(self._connect()) as db, db:
+            before = db.execute("SELECT COUNT(*) FROM received").fetchone()[0]
+            db.execute("ATTACH DATABASE ? AS otro", (str(other_path),))
+            db.execute("INSERT OR IGNORE INTO received SELECT youtube_id, metadata_json, embedding, received_at "
+                       "FROM otro.received")
+            after = db.execute("SELECT COUNT(*) FROM received").fetchone()[0]
+        return int(after - before)
+
+
+if __name__ == "__main__":
+    # python3 -m recolect.received <otro.sqlite3> [carpeta-de-datos]: suma al catálogo local los videos de otro
+    import sys
+
+    otro, data_dir = sys.argv[1], (sys.argv[2] if len(sys.argv) > 2 else "data")
+    store = ReceivedStore(store_path(data_dir))
+    nuevos = store.merge_from(otro)
+    print(f"[catálogo] {nuevos} videos nuevos desde {otro}; {store.count():,} recibidos en {store.path}")

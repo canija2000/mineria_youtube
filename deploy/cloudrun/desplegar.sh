@@ -11,8 +11,6 @@ BUCKET="${PROYECTO}-mapa-persistente"
 # se corta en conexiones lentas con "ReadTimeout". 1800 s = 30 minutos.
 export CLOUDSDK_CORE_HTTP_TIMEOUT=1800
 
-"$ROOT/deploy/cloudrun/preparar.sh"
-
 # Bucket donde persisten los videos que llegan por la web (catálogo SQLite y miniaturas).
 # Sin él, se perderían cada vez que Cloud Run apaga el contenedor o se vuelve a desplegar.
 if ! gcloud storage buckets describe "gs://$BUCKET" --project "$PROYECTO" >/dev/null 2>&1; then
@@ -24,6 +22,25 @@ NUMERO="$(gcloud projects describe "$PROYECTO" --format='value(projectNumber)')"
 gcloud storage buckets add-iam-policy-binding "gs://$BUCKET" --project "$PROYECTO" \
   --member "serviceAccount:${NUMERO}-compute@developer.gserviceaccount.com" \
   --role roles/storage.objectUser >/dev/null
+
+# Primero se traen los videos que llegaron por la web: la imagen nueva lleva el catálogo local,
+# y sin esto los que solo están en el bucket no entrarían a un mapa recalculado.
+"$ROOT/deploy/cloudrun/bajar_catalogo.sh" "$PROYECTO"
+PY="$ROOT/.venv/bin/python3"
+[ -x "$PY" ] || PY=python3
+(cd "$ROOT" && "$PY" - <<'EOF'
+import json, pandas as pd
+from recolect.received import ReceivedStore, store_path
+version = json.load(open("data/maps/current.json"))["version"]
+en_mapa = set(pd.read_parquet(f"data/maps/{version}/coords.parquet", columns=["youtube_id"])["youtube_id"])
+fuera = sum(1 for r in ReceivedStore(store_path("data")).all() if r["youtube_id"] not in en_mapa)
+if fuera:
+    print(f"[mapa] {fuera} videos recibidos no están en el mapa {version}: se ubican encima, sin moverlo. "
+          f"Para incluirlos: python3 remap.py y volver a desplegar.")
+EOF
+)
+
+"$ROOT/deploy/cloudrun/preparar.sh"
 
 # La llave de YouTube se lee del .env (sin mostrarla); sin ella la web funciona,
 # pero no se pueden agregar videos ni perfiles nuevos.

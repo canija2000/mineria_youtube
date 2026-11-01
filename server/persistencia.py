@@ -4,8 +4,8 @@ En Cloud Run cada contenedor nace desde la imagen y lo que escribe se pierde al 
 Si `MAPA_PERSISTENTE` apunta a una carpeta que sí persiste (un bucket de Cloud Storage
 montado como carpeta), el servidor:
 
-- al arrancar, trae de ahí el catálogo de videos recibidos (SQLite). La primera vez lo
-  siembra con el que viene en la imagen;
+- al arrancar, junta el catálogo de videos recibidos (SQLite) de ahí con el que viene en
+  la imagen y deja la unión en los dos lados. La primera vez lo siembra con el de la imagen;
 - después de cada video nuevo, deja una copia del catálogo ahí;
 - guarda ahí las miniaturas de los videos ingresados.
 
@@ -23,7 +23,7 @@ from contextlib import closing
 from pathlib import Path
 from threading import Lock
 
-from recolect.received import store_path
+from recolect.received import ReceivedStore, store_path
 
 _lock = Lock()
 
@@ -39,18 +39,28 @@ def carpeta_miniaturas(data_dir) -> Path:
 
 
 def restaurar(data_dir) -> None:
-    """Al arrancar: el catálogo persistente reemplaza al de la imagen (o se siembra con él)."""
+    """Al arrancar: junta el catálogo de la imagen con el del bucket y deja la unión en ambos.
+
+    Se juntan en vez de reemplazar porque cada uno puede tener videos que el otro no: el bucket,
+    los que llegaron por la web; la imagen, los agregados en local que entraron al mapa nuevo
+    (si se perdieran, sus puntos desaparecerían del mapa aunque tengan coordenadas).
+    """
     persistente = carpeta()
     if not persistente:
         return
     local, remoto = store_path(data_dir), persistente / store_path(data_dir).name
     persistente.mkdir(parents=True, exist_ok=True)
     if remoto.exists():
-        shutil.copyfile(remoto, local)
-        print(f"[persistencia] catálogo de videos recibidos restaurado desde {remoto}", flush=True)
+        with tempfile.TemporaryDirectory() as tmp:
+            # se lee una copia en disco local: SQLite nunca abre el archivo del montaje
+            copia = Path(tmp) / remoto.name
+            shutil.copyfile(remoto, copia)
+            nuevos = ReceivedStore(local).merge_from(copia)
+        print(f"[persistencia] catálogo de videos recibidos restaurado desde {remoto} "
+              f"(+{nuevos} que la imagen no tenía)", flush=True)
     else:
-        guardar(data_dir)
         print(f"[persistencia] primera vez: catálogo sembrado en {remoto}", flush=True)
+    guardar(data_dir)
 
 
 def guardar(data_dir) -> None:
