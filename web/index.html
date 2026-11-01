@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Mapa de YouTube</title>
+<link rel="icon" type="image/png" href="src/icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=Newsreader:opsz,wght@6..72,500;6..72,600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
@@ -48,12 +49,10 @@
     white-space: nowrap;
     color: var(--text);
   }
-  .brand i {
-    width: 10px;
-    height: 10px;
-    border-radius: 50%;
-    border: 2px solid var(--cyan);
-    display: inline-block;
+  .brand img {
+    width: 24px;
+    height: 24px;
+    display: block;
   }
   .search { flex: 1; display: flex; align-items: center; gap: 8px; max-width: 820px; }
   .seg {
@@ -558,7 +557,7 @@
 <body>
 <div class="app">
   <header>
-    <div class="brand"><i></i>Mapa de YouTube</div>
+    <div class="brand"><img src="src/icon-negativo.svg" alt="">Mapa de YouTube</div>
     <div class="search">
       <div class="seg">
         <button id="m-video" class="on">Video</button>
@@ -1093,7 +1092,7 @@ const STEPS = {
   video: [['Leyendo metadatos', 'API de YouTube'], ['Descargando miniatura', 'i.ytimg.com'], ['Codificando representación', 'EmbeddingGemma 2'], ['Proyectando en el mapa', 'UMAP 3D'], ['Buscando vecinos', 'k = 12']],
   image: [['Leyendo imagen en memoria', 'sin guardar en BDD'], ['Normalizando a 320×180 RGB', '70 tokens visuales'], ['Embedding visual', 'EmbeddingGemma 2'], ['Ubicando en espacio visual', 'UMAP 3D (k = 12)']],
   concept: [['Codificando concepto', 'EmbeddingGemma 2'], ['Calculando similitud coseno', 'espacio 768-d'], ['Delimitando región 3D', 'centroide UMAP'], ['Clasificando vecindario', 'kNN']],
-  profile: [['Resolviendo canal / playlist', 'API de YouTube'], ['Hidratando últimos videos', 'hasta 40 videos'], ['Embedding en lote', 'EmbeddingGemma 2'], ['Calculando centroide y burbuja', 'UMAP 3D']],
+  profile: [['Resolviendo canal / playlist', 'API de YouTube'], ['Hidratando últimos videos', 'hasta 40 videos'], ['Embedding en lote', 'EmbeddingGemma 2'], ['Calculando centroide del canal', 'UMAP 3D']],
 };
 function loading(m, at = 2) {
   const titles = { video: 'Ubicando video', concept: 'Ubicando concepto en el mapa', profile: 'Ubicando perfil' };
@@ -1295,9 +1294,10 @@ function switchNeighborTab(tab) {
   if (btnNear) btnNear.className = !isFar ? 'on-near' : '';
   if (btnFar) btnFar.className = isFar ? 'on-far' : '';
   if (subhint) {
+    const isProfile = currentRenderer === showRealProfileResult;
     subhint.innerHTML = isFar
-      ? `<span>Menor similitud · fuera de la burbuja</span><span>d = 1 − sim</span>`
-      : `<span>Mayor similitud coseno (768-d)</span><span>d = 1 − sim</span>`;
+      ? `<span>Menor similitud · ${isProfile ? 'distantes del canal' : 'fuera de la burbuja'}</span><span>d = 1 − sim</span>`
+      : `<span>${isProfile ? 'Mayor afinidad con el centroide del canal' : 'Mayor similitud coseno (768-d)'}</span><span>d = 1 − sim</span>`;
   }
   if (listEl) {
     listEl.innerHTML = renderNeighborCards(list, isFar);
@@ -1898,7 +1898,7 @@ function showRealProfileResult(data) {
       <div class="vid">
         <div class="cat-header">
           <h4>1 · Perfil / Canal analizado</h4>
-          <span class="cat-method">${nVids} videos</span>
+          <span class="cat-method">${nVids} videos${prof.added_videos ? ` · ${prof.added_videos} nuevos guardados` : ''}</span>
         </div>
         <div style="font:600 20px/1.25 'Newsreader', Georgia, serif;color:var(--text)">${prof.title || prof.query || 'Perfil'}</div>
         ${prof.subscriber_count != null ? `<div class="channel-line">Suscriptores: <strong>${prof.subscriber_count.toLocaleString('es-CL')}</strong> · Cohesión: <strong>${(prof.cohesion || 0.82).toFixed(2)}</strong></div>` : ''}
@@ -1908,7 +1908,7 @@ function showRealProfileResult(data) {
 
     <section class="panel-card">
       <div class="cat-header">
-        <h4>2 · Distribución de tu burbuja</h4>
+        <h4>2 · Distribución del canal</h4>
         <span class="cat-method">${(knn.breakdown || []).length} de ${colorMode === 'cluster' ? `${D.cats.length} grupos` : `${prof.total_categories || D.cats.length} categorías`}</span>
       </div>
       ${knn.breakdown && knn.breakdown.length ? `
@@ -1947,15 +1947,15 @@ function showRealProfileResult(data) {
 
     <section class="panel-card">
       <div class="cat-header">
-        <h4>3 · Videos afines vs. Fuera de tu burbuja</h4>
+        <h4>3 · Relacionados vs. distantes del canal</h4>
       </div>
       ${HEATMAP_LEGEND_HTML}
       <div class="nb-tabs">
-        <button id="tab-near" class="on-near" onclick="switchNeighborTab('nearest')">En tu burbuja (${nearCount})</button>
-        <button id="tab-far" onclick="switchNeighborTab('farthest')">Fuera de burbuja (${farCount})</button>
+        <button id="tab-near" class="on-near" onclick="switchNeighborTab('nearest')">Relacionados con el canal (${nearCount})</button>
+        <button id="tab-far" onclick="switchNeighborTab('farthest')">Distantes del canal (${farCount})</button>
       </div>
       <div class="nb-subhint" id="nb-subhint">
-        <span>Mayor afinidad con el centroide del perfil</span><span>d = 1 − sim</span>
+        <span>Mayor afinidad con el centroide del canal</span><span>d = 1 − sim</span>
       </div>
       <div class="nb" id="nb-list">
         ${renderNeighborCards(data.neighbors || [], false)}

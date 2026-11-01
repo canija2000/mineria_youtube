@@ -430,6 +430,41 @@ class VideoCatalog:
             self._last_store_count += 1
             return self.describe(video_id)
 
+    def add_many(self, items):
+        """Guarda un lote de videos recibidos (youtube_id, metadata, vector) y los ubica sobre el mapa.
+
+        Igual que `add`, pero apila las matrices una sola vez (los perfiles traen ~40 videos).
+        Devuelve los IDs que eran nuevos.
+        """
+        with self.lock:
+            nuevos, vistos = [], set()
+            for video_id, metadata, vector in items:
+                if self.has(video_id) or video_id in vistos:
+                    continue
+                vistos.add(video_id)
+                vector = np.asarray(vector, dtype=np.float32).reshape(-1)
+                nuevos.append((video_id, metadata, vector / max(float(np.linalg.norm(vector)), 1e-12)))
+            if not nuevos:
+                return []
+            vectors = np.vstack([v for _, _, v in nuevos])
+            coordinates = self.reducer.transform(vectors).astype(np.float32)
+            self.store.add_many(nuevos)
+            for video_id, metadata, vector in nuevos:
+                self.positions[video_id] = len(self.ids)
+                self.ids.append(video_id)
+                self.sources.append("recibido")
+                self.metadata[video_id] = _card(metadata)
+                pred_vert = self._classify_vector_vertical(vector)
+                if pred_vert and video_id not in self.verticals:
+                    self.verticals[video_id] = pred_vert
+            self.vectors = np.vstack((self.vectors, vectors))
+            self.coordinates = np.vstack((self.coordinates, coordinates))
+            self.in_map = np.append(self.in_map, np.zeros(len(nuevos), dtype=self.in_map.dtype))
+            self.cluster_ids = np.append(self.cluster_ids,
+                                         np.array([self._cluster_for(v) for _, _, v in nuevos], dtype=np.int16))
+            self._last_store_count += len(nuevos)
+            return [video_id for video_id, _, _ in nuevos]
+
     def describe(self, video_id, neighbor_count=12):
         with self.lock:
             position = self.positions[video_id]

@@ -114,6 +114,20 @@ def _save_thumbnail(video_id: str) -> Path:
     return thumb_path
 
 
+def _save_thumbnails(video_ids: list[str]) -> None:
+    """Descarga en paralelo las miniaturas de un lote de videos; si alguna falla, el video igual queda."""
+    from concurrent.futures import ThreadPoolExecutor
+
+    def bajar(video_id):
+        try:
+            _save_thumbnail(video_id)
+        except Exception as exc:
+            print(f"[miniatura] no se pudo guardar la de {video_id}: {exc}", flush=True)
+
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        list(pool.map(bajar, video_ids))
+
+
 def _register_video(video_id: str, metadata: dict, catalog: VideoCatalog) -> None:
     """Agrega al catálogo un video que llega por primera vez: metadatos, vector de texto y miniatura."""
     if catalog.has(video_id):
@@ -256,7 +270,14 @@ def analyze_profile(payload: ProfileRequest):
         profile_info, videos = res
         texts = [build_text(v) for v in videos]
         vectors = app.state.embedder.encode(texts, batch_size=32)
-        return catalog.locate_profile(profile_info, videos, vectors)
+        # Los videos del canal ya están descargados y con vector: quedan guardados como recibidos.
+        nuevos = catalog.add_many([(v["youtube_id"], v, vec) for v, vec in zip(videos, vectors)])
+        if nuevos:
+            persistencia.guardar(os.getenv("MAPA_DATA", "data"))
+            _save_thumbnails(nuevos)
+        result = catalog.locate_profile(profile_info, videos, vectors)
+        result["profile"]["added_videos"] = len(nuevos)
+        return result
     except HTTPException:
         raise
     except Exception as exc:
