@@ -36,7 +36,7 @@ en_mapa = set(pd.read_parquet(f"data/maps/{version}/coords.parquet", columns=["y
 fuera = sum(1 for r in ReceivedStore(store_path("data")).all() if r["youtube_id"] not in en_mapa)
 if fuera:
     print(f"[mapa] {fuera} videos recibidos no están en el mapa {version}: se ubican encima, sin moverlo. "
-          f"Para incluirlos: python3 remap.py y volver a desplegar.")
+          f"Para incluirlos: .venv/bin/python remap.py y volver a desplegar.")
 EOF
 )
 

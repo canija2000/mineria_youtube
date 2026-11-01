@@ -59,7 +59,7 @@ Los videos que llegan por la web (uno a uno o los ~40 de un perfil) se ubican **
 deploy/cloudrun/bajar_catalogo.sh <ID-del-proyecto>
 ```
 ```bash
-python3 remap.py
+.venv/bin/python remap.py
 ```
 ```bash
 deploy/cloudrun/desplegar.sh <ID-del-proyecto>
