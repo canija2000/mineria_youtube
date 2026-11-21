@@ -84,6 +84,8 @@ sudo docker run -d --name mapa --restart unless-stopped \
   --env-file "$HOME/mapa/.env" \
   mapa-youtube >/dev/null
 sudo docker image prune -f >/dev/null   # borra las imágenes viejas (3–4 GB cada una)
+# la caché de construcción crece ~2 GB por despliegue; se deja en 3 GB (alcanza para no reinstalar torch)
+sudo docker builder prune -f --keep-storage 3GB >/dev/null
 
 # Sin dominio se mantiene el Caddyfile que ya estaba (así un despliegue sin dominio no apaga el HTTPS)
 if [ -n "$DOMINIO" ] || ! grep -q reverse_proxy /etc/caddy/Caddyfile; then
