@@ -869,13 +869,26 @@ class VideoCatalog:
         videos: list[dict],
         vectors: np.ndarray,
         neighbor_count: int = 12,
+        space: str = "text",
     ) -> dict:
-        """Ubica un perfil/canal (hasta 40 videos) en el mapa 3D, mide su burbuja y recomienda fuera de ella."""
-        with self.lock:
-            vecs = np.asarray(vectors, dtype=np.float32)
-            norms = np.linalg.norm(vecs, axis=1, keepdims=True)
-            vecs = vecs / np.clip(norms, 1e-12, None)
+        """Ubica un perfil/canal (hasta 40 videos) en un mapa 3D y busca sus videos cercanos y lejanos.
 
+        `space` es "text" o uno de los mapas de solo videos base (imagen o fusión); `vectors` son los
+        vectores de los videos en ese espacio. En el de texto, un video que no está en el mapa se ubica
+        con el molde UMAP; en los otros, en el promedio de sus 15 vecinos más parecidos.
+        """
+        with self.lock:
+            sp = self.spaces.get(space)
+            if sp is not None and not sp.ready:
+                sp, space = None, "text"
+            ids = sp.ids if sp else self.ids
+            positions = sp.positions if sp else self.positions
+            pool = sp.vectors if sp else self.vectors
+            coordinates = sp.coordinates if sp else self.coordinates
+            version = sp.meta.get("version") if sp else self.map_meta["version"]
+
+            vecs = np.asarray(vectors, dtype=np.float32)
+            vecs = vecs / np.clip(np.linalg.norm(vecs, axis=1, keepdims=True), 1e-12, None)
             centroid_vec = vecs.mean(axis=0)
             centroid_vec /= max(float(np.linalg.norm(centroid_vec)), 1e-12)
             cohesion = float((vecs @ centroid_vec).mean())
@@ -884,41 +897,48 @@ class VideoCatalog:
             missing_idx = []
             for k, v in enumerate(videos):
                 yid = str(v.get("youtube_id", ""))
-                if yid in self.positions:
-                    prof_coords[k] = self.coordinates[self.positions[yid]]
+                if yid in positions:
+                    prof_coords[k] = coordinates[positions[yid]]
                 else:
                     missing_idx.append(k)
-            if missing_idx:
+            if missing_idx and sp is None:
                 prof_coords[missing_idx] = self.reducer.transform(vecs[missing_idx]).astype(np.float32)
-
+            for k in (missing_idx if sp is not None else []):
+                sims_k = pool @ vecs[k]
+                top_k = np.argsort(-sims_k)[:15]
+                weights = np.clip(sims_k[top_k], 0.01, None)
+                prof_coords[k] = (coordinates[top_k] * (weights / weights.sum())[:, None]).sum(axis=0)
             centroid_3d = prof_coords.mean(axis=0).astype(float).tolist()
 
-            video_cats = []
-            for k, v in enumerate(videos):
-                yid = str(v.get("youtube_id", ""))
-                cat = self.verticals.get(yid) or self._classify_vector_vertical(vecs[k]) or "(Sin categoría)"
-                video_cats.append(cat)
+            def vertical_of(k: int) -> str:
+                yid = str(videos[k].get("youtube_id", ""))
+                if self.verticals.get(yid):
+                    return self.verticals[yid]
+                if sp is None:
+                    return self._classify_vector_vertical(vecs[k]) or "(Sin categoría)"
+                # fuera del texto: voto de los 12 vecinos más parecidos en ese espacio
+                votos = Counter(self.verticals.get(ids[i]) for i in np.argsort(-(pool @ vecs[k]))[:neighbor_count])
+                votos.pop(None, None)
+                return votos.most_common(1)[0][0] if votos else "(Sin categoría)"
 
+            video_cats = [vertical_of(k) for k in range(len(videos))]
             cat_counts = Counter(c for c in video_cats if c != "(Sin categoría)").most_common()
             total_cats_in_map = len(self.cat_names) or 25
 
             profile_ids = {str(v.get("youtube_id", "")) for v in videos}
-            similarities = self.vectors @ centroid_vec
+            similarities = pool @ centroid_vec
             near_sims = similarities.copy()
-            for yid in profile_ids:
-                if yid in self.positions:
-                    near_sims[self.positions[yid]] = -np.inf
-            nearest = np.argsort(-near_sims)[:neighbor_count]
-
             far_sims = similarities.copy()
             for yid in profile_ids:
-                if yid in self.positions:
-                    far_sims[self.positions[yid]] = np.inf
+                if yid in positions:
+                    near_sims[positions[yid]] = -np.inf
+                    far_sims[positions[yid]] = np.inf
+            nearest = np.argsort(-near_sims)[:neighbor_count]
             far_pool = np.argsort(far_sims)[:400]
             farthest = []
             seen_verticals = set()
             for i in far_pool:
-                v = self.verticals.get(self.ids[i])
+                v = self.verticals.get(ids[i])
                 if v and v not in seen_verticals:
                     seen_verticals.add(v)
                     farthest.append(i)
@@ -939,8 +959,19 @@ class VideoCatalog:
                 "breakdown": [{"vertical": v, "count": c} for v, c in cat_counts],
             }
 
+            def card(i):
+                return {
+                    "youtube_id": ids[i],
+                    **self.metadata.get(ids[i], {}),
+                    "vertical": self.verticals.get(ids[i]),
+                    "cluster": self._cluster_at(i, space),
+                    "similarity": float(similarities[i]),
+                    "projection": coordinates[i].astype(float).tolist(),
+                }
+
             return {
-                "map_version": self.map_meta["version"],
+                "map_version": version,
+                "representation": space,
                 "profile": {
                     **profile_info,
                     "analyzed_videos": len(videos),
@@ -949,7 +980,7 @@ class VideoCatalog:
                     "cohesion": round(cohesion, 3),
                     "knn_votes": knn_votes,
                     "zero_shot_tags": self._predict_zero_shot(centroid_vec),
-                    "cluster": self._nearest_cluster(centroid_vec),
+                    "cluster": self._nearest_cluster(centroid_vec, space),
                 },
                 "projection": centroid_3d,
                 "profile_videos": [
@@ -957,34 +988,14 @@ class VideoCatalog:
                         "youtube_id": v.get("youtube_id"),
                         "title": v.get("title"),
                         "vertical": video_cats[k],
-                        "cluster": (self._cluster_at(self.positions[str(v.get("youtube_id", ""))])
-                                    if str(v.get("youtube_id", "")) in self.positions
-                                    else self._nearest_cluster(vecs[k])),
+                        "cluster": (self._cluster_at(positions[str(v.get("youtube_id", ""))], space)
+                                    if str(v.get("youtube_id", "")) in positions
+                                    else self._nearest_cluster(vecs[k], space)),
                         "similarity": float(vecs[k] @ centroid_vec),
                         "projection": prof_coords[k].astype(float).tolist(),
                     }
                     for k, v in enumerate(videos)
                 ],
-                "neighbors": [
-                    {
-                        "youtube_id": self.ids[i],
-                        **self.metadata.get(self.ids[i], {}),
-                        "vertical": self.verticals.get(self.ids[i]),
-                        "cluster": self._cluster_at(i),
-                        "similarity": float(similarities[i]),
-                        "projection": self.coordinates[i].astype(float).tolist(),
-                    }
-                    for i in nearest
-                ],
-                "farthest": [
-                    {
-                        "youtube_id": self.ids[i],
-                        **self.metadata.get(self.ids[i], {}),
-                        "vertical": self.verticals.get(self.ids[i]),
-                        "cluster": self._cluster_at(i),
-                        "similarity": float(similarities[i]),
-                        "projection": self.coordinates[i].astype(float).tolist(),
-                    }
-                    for i in farthest
-                ],
+                "neighbors": [card(i) for i in nearest],
+                "farthest": [card(i) for i in farthest],
             }

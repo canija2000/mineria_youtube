@@ -578,10 +578,10 @@
     <aside class="left">
       <div><h4>Representación</h4></div>
       <div class="proj">
-        <label id="rep-text" class="on" onclick="switchRepresentation('text')"><span></span>Texto<small id="count-text">—</small></label>
+        <label id="rep-text" onclick="switchRepresentation('text')"><span></span>Texto<small id="count-text">—</small></label>
         <label id="rep-image" onclick="switchRepresentation('image')"><span></span>Imagen<small id="count-image">—</small></label>
         <label id="rep-imgtext" onclick="switchRepresentation('imgtext')" title="Miniatura y texto en una sola pasada del modelo"><span></span>Fusión temprana<small id="count-imgtext">—</small></label>
-        <label id="rep-fusion" onclick="switchRepresentation('fusion')" title="Suma normalizada de los vectores de texto e imagen"><span></span>Fusión tardía<small id="count-fusion">—</small></label>
+        <label id="rep-fusion" class="on" onclick="switchRepresentation('fusion')" title="Suma normalizada de los vectores de texto e imagen"><span></span>Fusión tardía<small id="count-fusion">—</small></label>
       </div>
       <div><h4>Colorear por</h4></div>
       <div class="color-by" id="color-by">
@@ -608,7 +608,7 @@
 const API_BASE = (window.location.origin === 'null' || window.location.protocol === 'file:') ? 'http://127.0.0.1:8000' : '';
 // D se llena con la respuesta de /map (applyMapPayload)
 let D = { cats: [], ids: [], titles: [], cat: [], pts: [], info: {}, parts: { vertical: { cats: [], cat: [] }, cluster: null } };
-let currentRepresentation = 'text';
+let currentRepresentation = 'fusion';   // la fusión tardía es la mejor en las métricas: vista por defecto
 const REPRESENTATIONS = {
   text:    { label: 'Texto',               space: 'espacio textual' },
   image:   { label: 'Imagen (Miniaturas)', space: 'espacio visual' },
@@ -852,7 +852,12 @@ async function loadServerMap(rep = 'text') {
     if (metaTag) metaTag.textContent = `No se pudo cargar el mapa (${e.message}). ¿Está corriendo el servidor?`;
   }
 }
-loadServerMap('text');
+loadServerMap('fusion');
+// el contador de texto se llena aunque se parta en otra vista
+fetch(API_BASE + '/health').then(r => r.ok ? r.json() : null).then(h => {
+  const el = document.getElementById('count-text');
+  if (h && el) el.textContent = h.videos.toLocaleString('es-CL');
+}).catch(() => {});
 
 // Tras agregar un video o un perfil: si el catálogo de texto creció, recarga los puntos para que
 // el contador y el mapa base los muestren, sin borrar el resultado que se está viendo.
@@ -1658,7 +1663,7 @@ function focusNeighbor(nbId, coords, btnEl) {
 }
 
 async function runConcept(query) {
-  // conceptos y perfiles se ubican en el espacio de texto
+  // los conceptos se ubican en el espacio de texto (una palabra no tiene miniatura)
   if (currentRepresentation !== 'text') await switchRepresentation('text');
   clearResult();
   loading('concept', 0);
@@ -2005,8 +2010,6 @@ function showRealProfileResult(data) {
 }
 
 async function runRealProfile(query) {
-  // conceptos y perfiles se ubican en el espacio de texto
-  if (currentRepresentation !== 'text') await switchRepresentation('text');
   clearResult();
   loading('profile', 0);
   let step = 0;
@@ -2021,7 +2024,7 @@ async function runRealProfile(query) {
     const res = await fetch(API_BASE + '/profiles', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ profile: query })
+      body: JSON.stringify({ profile: query, representation: currentRepresentation })
     });
     clearInterval(timer);
     if (!res.ok) {

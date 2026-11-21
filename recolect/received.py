@@ -1,6 +1,9 @@
 """Videos recibidos por el servidor.
 
-Cada link que llega a la webapp se guarda aquí con sus metadatos y su vector.
+Cada link que llega a la webapp se guarda aquí con sus metadatos y su vector de texto.
+La tabla `space_vectors` guarda además los vectores de miniatura ("image") y de fusión temprana
+("imgtext") que el servidor calcula al consultar un video en esos mapas, para no volver a
+embeber la imagen (la fusión tardía sale de texto + imagen y no se guarda).
 El servidor los ubica sobre el mapa vigente, y `remap.py` los incluye la próxima
 vez que recalcula el mapa, para que el mapa no quede fijo en los videos viejos de YT-8M.
 """
@@ -32,6 +35,12 @@ class ReceivedStore:
                 metadata_json TEXT NOT NULL,
                 embedding BLOB NOT NULL,
                 received_at TEXT NOT NULL
+            )""")
+            db.execute("""CREATE TABLE IF NOT EXISTS space_vectors (
+                youtube_id TEXT NOT NULL,
+                space TEXT NOT NULL,
+                embedding BLOB NOT NULL,
+                PRIMARY KEY (youtube_id, space)
             )""")
 
     def _connect(self):
@@ -79,6 +88,29 @@ class ReceivedStore:
             row = db.execute("SELECT metadata_json FROM received WHERE youtube_id = ?", (youtube_id,)).fetchone()
         return json.loads(row[0]) if row else None
 
+    def add_space_vectors(self, space: str, items: dict[str, np.ndarray]) -> None:
+        """Guarda vectores de un espacio ("image" o "imgtext") por youtube_id; no pisa los que ya están."""
+        if not items:
+            return
+        payload = [(str(yid), space, np.asarray(vec, dtype=np.float32).reshape(-1).tobytes())
+                   for yid, vec in items.items()]
+        with closing(self._connect()) as db, db:
+            db.executemany("INSERT OR IGNORE INTO space_vectors VALUES (?, ?, ?)", payload)
+
+    def space_vectors(self, space: str, youtube_ids=None) -> dict[str, np.ndarray]:
+        """Vectores guardados de un espacio: de esos ids, o de todos si `youtube_ids` es None."""
+        with closing(self._connect()) as db:
+            if youtube_ids is None:
+                rows = db.execute("SELECT youtube_id, embedding FROM space_vectors WHERE space = ?", (space,)).fetchall()
+            else:
+                ids = list(youtube_ids)
+                rows = []
+                for i in range(0, len(ids), 500):
+                    lote = ids[i:i + 500]
+                    rows += db.execute(f"SELECT youtube_id, embedding FROM space_vectors WHERE space = ? "
+                                       f"AND youtube_id IN ({','.join('?' * len(lote))})", (space, *lote)).fetchall()
+        return {yid: np.frombuffer(blob, dtype=np.float32).copy() for yid, blob in rows}
+
     def count(self) -> int:
         with closing(self._connect()) as db:
             return db.execute("SELECT COUNT(*) FROM received").fetchone()[0]
@@ -93,6 +125,10 @@ class ReceivedStore:
             db.execute("ATTACH DATABASE ? AS otro", (str(other_path),))
             db.execute("INSERT OR IGNORE INTO received SELECT youtube_id, metadata_json, embedding, received_at "
                        "FROM otro.received")
+            # catálogos anteriores a esta tabla no la tienen
+            if db.execute("SELECT 1 FROM otro.sqlite_master WHERE name = 'space_vectors'").fetchone():
+                db.execute("INSERT OR IGNORE INTO space_vectors SELECT youtube_id, space, embedding "
+                           "FROM otro.space_vectors")
             after = db.execute("SELECT COUNT(*) FROM received").fetchone()[0]
         return int(after - before)
 

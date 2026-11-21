@@ -41,6 +41,7 @@ class ImageSearchRequest(BaseModel):
 
 class ProfileRequest(BaseModel):
     profile: str = Field(min_length=2, max_length=2048, description="@handle, URL de canal o playlist de YouTube")
+    representation: str = Field(default="fusion", description="Espacio: text, image, imgtext o fusion")
 
 
 @asynccontextmanager
@@ -142,30 +143,55 @@ def _register_video(video_id: str, metadata: dict, catalog: VideoCatalog) -> Non
         print(f"[miniatura] no se pudo guardar la de {video_id}: {exc}", flush=True)
 
 
-def _encode_video_thumbnail(video_id: str, embedder: TextEmbedder):
-    thumb_path = _save_thumbnail(video_id)
-    embedder.enable_images()
-    return embedder.encode([{"image": [str(thumb_path)]}], batch_size=1, prompt_name=None)[0]
-
-
 def _unit(vector) -> np.ndarray:
     vector = np.asarray(vector, dtype=np.float32).reshape(-1)
     return vector / max(float(np.linalg.norm(vector)), 1e-12)
 
 
-def _space_vector(rep: str, video_id: str, metadata: dict, catalog: VideoCatalog) -> np.ndarray:
-    """Vector de un video en un mapa de solo videos base, calculado igual que en recolect/modalities.py."""
-    embedder = app.state.embedder
-    if rep == "image":
-        return _encode_video_thumbnail(video_id, embedder)
-    if rep == "imgtext":   # fusión temprana: miniatura y texto en una sola pasada del modelo
-        thumb_path = _save_thumbnail(video_id)
+def _space_vectors(rep: str, videos: list[dict], text_vectors, catalog: VideoCatalog) -> np.ndarray:
+    """Vectores de un lote de videos en un mapa de solo videos base (imagen o fusión).
+
+    Se calculan igual que en recolect/modalities.py. Por orden de preferencia, cada vector sale de:
+    1. el mapa, si el video es uno de sus videos base;
+    2. la SQLite (`space_vectors`), si ya se calculó en una consulta anterior;
+    3. el modelo: se baja la miniatura, se embebe y se guarda en la SQLite para la próxima vez.
+    La fusión tardía no se guarda: es la suma normalizada del vector de texto y el de imagen.
+    """
+    space = catalog.spaces[rep]
+    kind = "imgtext" if rep == "imgtext" else "image"   # lo que hay que embeber (y guardar)
+    ids = [v["youtube_id"] for v in videos]
+    out = np.zeros((len(videos), np.asarray(text_vectors).shape[1]), dtype=np.float32)
+    faltan = [k for k, video_id in enumerate(ids) if video_id not in space.positions]
+    for k, video_id in enumerate(ids):
+        if video_id in space.positions:
+            out[k] = space.vectors[space.positions[video_id]]
+    guardados = catalog.store.space_vectors(kind, [ids[k] for k in faltan]) if faltan else {}
+    por_embeber = [k for k in faltan if ids[k] not in guardados]
+    if por_embeber:
+        _save_thumbnails([ids[k] for k in por_embeber])
+        thumbs = {k: _save_thumbnail(ids[k]) for k in por_embeber}   # ya descargadas: solo da la ruta
+        embedder = app.state.embedder
         embedder.enable_images()
-        return embedder.encode([{"text": f"task: clustering | query: <|image|> {build_text(metadata)}",
-                                 "image": [str(thumb_path)]}], batch_size=1, prompt_name=None)[0]
-    # fusión tardía: suma normalizada del vector de texto (ya en el catálogo) y el de la miniatura
+        if kind == "imgtext":   # fusión temprana: miniatura y texto en una sola pasada del modelo
+            entradas = [{"text": f"task: clustering | query: <|image|> {build_text(videos[k])}",
+                         "image": [str(thumbs[k])]} for k in por_embeber]
+        else:
+            entradas = [{"image": [str(thumbs[k])]} for k in por_embeber]
+        nuevos = embedder.encode(entradas, batch_size=8, prompt_name=None)
+        calculados = {ids[k]: np.asarray(vec, dtype=np.float32) for k, vec in zip(por_embeber, nuevos)}
+        catalog.store.add_space_vectors(kind, calculados)
+        persistencia.guardar(os.getenv("MAPA_DATA", "data"))
+        guardados.update(calculados)
+    for k in faltan:
+        vec = guardados[ids[k]]
+        out[k] = _unit(_unit(text_vectors[k]) + _unit(vec)) if rep == "fusion" else vec
+    return out
+
+
+def _space_vector(rep: str, video_id: str, metadata: dict, catalog: VideoCatalog) -> np.ndarray:
+    """Vector de un video en un mapa de solo videos base (ver _space_vectors)."""
     text_vector = catalog.vectors[catalog.positions[video_id]]
-    return _unit(_unit(text_vector) + _unit(_encode_video_thumbnail(video_id, embedder)))
+    return _space_vectors(rep, [{"youtube_id": video_id, **metadata}], text_vector.reshape(1, -1), catalog)[0]
 
 
 @app.post("/videos", status_code=201)
@@ -297,7 +323,12 @@ def analyze_profile(payload: ProfileRequest):
         if nuevos:
             persistencia.guardar(os.getenv("MAPA_DATA", "data"))
             _save_thumbnails(nuevos)
-        result = catalog.locate_profile(profile_info, videos, vectors)
+        rep = (payload.representation or "text").strip().lower()
+        if rep in catalog.spaces and catalog.spaces[rep].ready:
+            space_vectors = _space_vectors(rep, videos, vectors, catalog)
+            result = catalog.locate_profile(profile_info, videos, space_vectors, space=rep)
+        else:
+            result = catalog.locate_profile(profile_info, videos, vectors)
         result["profile"]["added_videos"] = len(nuevos)
         return result
     except HTTPException:
