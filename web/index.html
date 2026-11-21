@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Mapa de YouTube</title>
+<link rel="icon" type="image/png" href="src/icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=Newsreader:opsz,wght@6..72,500;6..72,600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
@@ -48,12 +49,10 @@
     white-space: nowrap;
     color: var(--text);
   }
-  .brand i {
-    width: 10px;
-    height: 10px;
-    border-radius: 50%;
-    border: 2px solid var(--cyan);
-    display: inline-block;
+  .brand img {
+    width: 24px;
+    height: 24px;
+    display: block;
   }
   .search { flex: 1; display: flex; align-items: center; gap: 8px; max-width: 820px; }
   .seg {
@@ -558,7 +557,7 @@
 <body>
 <div class="app">
   <header>
-    <div class="brand"><i></i>Mapa de YouTube</div>
+    <div class="brand"><img src="src/icon-negativo.svg" alt="">Mapa de YouTube</div>
     <div class="search">
       <div class="seg">
         <button id="m-video" class="on">Video</button>
@@ -579,10 +578,10 @@
     <aside class="left">
       <div><h4>Representación</h4></div>
       <div class="proj">
-        <label id="rep-text" class="on" onclick="switchRepresentation('text')"><span></span>Texto<small id="count-text">—</small></label>
+        <label id="rep-text" onclick="switchRepresentation('text')"><span></span>Texto<small id="count-text">—</small></label>
         <label id="rep-image" onclick="switchRepresentation('image')"><span></span>Imagen<small id="count-image">—</small></label>
-        <label class="disabled" title="Próximamente"><span></span>Fusión temprana</label>
-        <label class="disabled" title="Próximamente"><span></span>Fusión tardía</label>
+        <label id="rep-imgtext" onclick="switchRepresentation('imgtext')" title="Miniatura y texto en una sola pasada del modelo"><span></span>Fusión temprana<small id="count-imgtext">—</small></label>
+        <label id="rep-fusion" class="on" onclick="switchRepresentation('fusion')" title="Suma normalizada de los vectores de texto e imagen"><span></span>Fusión tardía<small id="count-fusion">—</small></label>
       </div>
       <div><h4>Colorear por</h4></div>
       <div class="color-by" id="color-by">
@@ -609,7 +608,13 @@
 const API_BASE = (window.location.origin === 'null' || window.location.protocol === 'file:') ? 'http://127.0.0.1:8000' : '';
 // D se llena con la respuesta de /map (applyMapPayload)
 let D = { cats: [], ids: [], titles: [], cat: [], pts: [], info: {}, parts: { vertical: { cats: [], cat: [] }, cluster: null } };
-let currentRepresentation = 'text';
+let currentRepresentation = 'fusion';   // la fusión tardía es la mejor en las métricas: vista por defecto
+const REPRESENTATIONS = {
+  text:    { label: 'Texto',               space: 'espacio textual' },
+  image:   { label: 'Imagen (Miniaturas)', space: 'espacio visual' },
+  imgtext: { label: 'Fusión temprana',     space: 'fusión temprana' },
+  fusion:  { label: 'Fusión tardía',       space: 'fusión tardía' },
+};
 const PALETTE = ['#4DA3FF', '#E2A336', '#D96B62', '#68B87A', '#9D7FE8', '#D97EB0', '#54B8B1', '#E08258', '#869CEB', '#C4BE62',
   '#2F7FD8', '#B97F1E', '#B04A42', '#478F57', '#7558C4', '#B0588A', '#2F928B', '#B85F37', '#5E74C4', '#9C9640'];
 // Colorear por categoría de YouTube ('vertical') o por grupo HDBSCAN ('cluster')
@@ -823,18 +828,18 @@ function applyMapPayload(data, rep) {
   activeCatFilter = null;
   scene.remove(base);
   all = [...P.keys()];
-  base = cloud(all, i => colorOf(D.cat[i]), rep === 'image' ? 0.19 : 0.15, 0.85);
+  base = cloud(all, i => colorOf(D.cat[i]), rep === 'text' ? 0.15 : 0.19, 0.85);
   scene.add(base);
 
   updateLegend();
 
-  const repLabel = rep === 'image' ? 'Imagen (Miniaturas)' : 'Texto';
+  const repLabel = REPRESENTATIONS[rep].label;
   const metaTag = document.querySelector('.meta');
   if (metaTag) metaTag.textContent = `${D.ids.length.toLocaleString('es-CL')} videos · ${repLabel} · UMAP 3D`;
-  const countEl = document.getElementById(rep === 'image' ? 'count-image' : 'count-text');
+  const countEl = document.getElementById(`count-${rep}`);
   if (countEl) countEl.textContent = D.ids.length.toLocaleString('es-CL');
   const tag = document.querySelector('.tag');
-  if (tag) tag.textContent = `${rep === 'image' ? 'espacio visual' : 'espacio textual'} · v${data.map_version}`;
+  if (tag) tag.textContent = `${REPRESENTATIONS[rep].space} · v${data.map_version}`;
 }
 
 async function loadServerMap(rep = 'text') {
@@ -847,14 +852,39 @@ async function loadServerMap(rep = 'text') {
     if (metaTag) metaTag.textContent = `No se pudo cargar el mapa (${e.message}). ¿Está corriendo el servidor?`;
   }
 }
-loadServerMap('text');
+loadServerMap('fusion');
+// el contador de texto se llena aunque se parta en otra vista
+fetch(API_BASE + '/health').then(r => r.ok ? r.json() : null).then(h => {
+  const el = document.getElementById('count-text');
+  if (h && el) el.textContent = h.videos.toLocaleString('es-CL');
+}).catch(() => {});
+
+// Tras agregar un video o un perfil: si el catálogo de texto creció, recarga los puntos para que
+// el contador y el mapa base los muestren, sin borrar el resultado que se está viendo.
+async function refreshAfterAdd() {
+  try {
+    const res = await fetch(API_BASE + '/health');
+    if (!res.ok) return;
+    const total = (await res.json()).videos;
+    const countEl = document.getElementById('count-text');
+    if (currentRepresentation !== 'text') {
+      if (countEl) countEl.textContent = total.toLocaleString('es-CL');
+      return;
+    }
+    if (total === D.ids.length) return;
+    const mapRes = await fetch(`${API_BASE}/map?rep=text`);
+    if (!mapRes.ok || currentRepresentation !== 'text') return;
+    const opacity = base.material.opacity;   // el resultado atenúa el mapa base: se conserva
+    applyMapPayload(await mapRes.json(), 'text');
+    base.material.opacity = opacity;
+  } catch (e) { /* el contador se pondrá al día con la próxima carga del mapa */ }
+}
 
 async function switchRepresentation(rep) {
-  if (rep !== 'text' && rep !== 'image') return;
+  if (!REPRESENTATIONS[rep]) return;
   if (currentRepresentation === rep) return;
   currentRepresentation = rep;
-  document.getElementById('rep-text').classList.toggle('on', rep === 'text');
-  document.getElementById('rep-image').classList.toggle('on', rep === 'image');
+  for (const r of Object.keys(REPRESENTATIONS)) document.getElementById(`rep-${r}`).classList.toggle('on', r === rep);
   clearResult();
   await loadServerMap(rep);
   setCamera(new THREE.Vector3(), 30);
@@ -1093,7 +1123,7 @@ const STEPS = {
   video: [['Leyendo metadatos', 'API de YouTube'], ['Descargando miniatura', 'i.ytimg.com'], ['Codificando representación', 'EmbeddingGemma 2'], ['Proyectando en el mapa', 'UMAP 3D'], ['Buscando vecinos', 'k = 12']],
   image: [['Leyendo imagen en memoria', 'sin guardar en BDD'], ['Normalizando a 320×180 RGB', '70 tokens visuales'], ['Embedding visual', 'EmbeddingGemma 2'], ['Ubicando en espacio visual', 'UMAP 3D (k = 12)']],
   concept: [['Codificando concepto', 'EmbeddingGemma 2'], ['Calculando similitud coseno', 'espacio 768-d'], ['Delimitando región 3D', 'centroide UMAP'], ['Clasificando vecindario', 'kNN']],
-  profile: [['Resolviendo canal / playlist', 'API de YouTube'], ['Hidratando últimos videos', 'hasta 40 videos'], ['Embedding en lote', 'EmbeddingGemma 2'], ['Calculando centroide y burbuja', 'UMAP 3D']],
+  profile: [['Resolviendo canal / playlist', 'API de YouTube'], ['Hidratando videos', 'hasta 40 videos'], ['Embedding en lote', 'EmbeddingGemma 2'], ['Calculando centroide', 'UMAP 3D']],
 };
 function loading(m, at = 2) {
   const titles = { video: 'Ubicando video', concept: 'Ubicando concepto en el mapa', profile: 'Ubicando perfil' };
@@ -1295,9 +1325,11 @@ function switchNeighborTab(tab) {
   if (btnNear) btnNear.className = !isFar ? 'on-near' : '';
   if (btnFar) btnFar.className = isFar ? 'on-far' : '';
   if (subhint) {
+    const isProfile = currentRenderer === showRealProfileResult;
+    const de = isProfile && (currentVideoData.profile || {}).kind === 'playlist' ? 'de la playlist' : 'del canal';
     subhint.innerHTML = isFar
-      ? `<span>Menor similitud · fuera de la burbuja</span><span>d = 1 − sim</span>`
-      : `<span>Mayor similitud coseno (768-d)</span><span>d = 1 − sim</span>`;
+      ? `<span>Menor similitud · ${isProfile ? `distantes ${de}` : 'fuera de la burbuja'}</span><span>d = 1 − sim</span>`
+      : `<span>${isProfile ? `Mayor afinidad con el centroide ${de}` : 'Mayor similitud coseno (768-d)'}</span><span>d = 1 − sim</span>`;
   }
   if (listEl) {
     listEl.innerHTML = renderNeighborCards(list, isFar);
@@ -1374,7 +1406,7 @@ function showRealVideoResult(data) {
       <div class="vid">
         <div class="cat-header">
           <h4>1 · Video y metadatos</h4>
-          <span class="cat-method">${currentRepresentation === 'image' ? 'espacio imagen' : 'espacio texto'}</span>
+          <span class="cat-method">${REPRESENTATIONS[currentRepresentation].space}</span>
         </div>
         <a class="vid-thumb-link" href="${ytUrl}" target="_blank" title="Abrir en YouTube">
           <img src="${thumbUrl}" alt="" onerror="this.src='https://i.ytimg.com/vi/${yid}/hqdefault.jpg'">
@@ -1631,6 +1663,8 @@ function focusNeighbor(nbId, coords, btnEl) {
 }
 
 async function runConcept(query) {
+  // los conceptos se ubican en el espacio de texto (una palabra no tiene miniatura)
+  if (currentRepresentation !== 'text') await switchRepresentation('text');
   clearResult();
   loading('concept', 0);
   let step = 0;
@@ -1696,6 +1730,7 @@ async function runRealVideo(query) {
       document.getElementById('loading').classList.remove('on');
       const targetPos = showRealVideoResult(data);
       setCamera(targetPos, 16);
+      refreshAfterAdd();
     }, 300);
   } catch (err) {
     clearInterval(timer);
@@ -1893,22 +1928,29 @@ function showRealProfileResult(data) {
   const nearCount = (data.neighbors || []).length;
   const farCount = (data._farthestList || []).length;
 
+  // Un canal (sus subidas) o una playlist pegada directo: cambia cómo se nombra en el panel
+  const isPlaylist = prof.kind === 'playlist';
+  const de = isPlaylist ? 'de la playlist' : 'del canal';
+  const cohesion = `Cohesión: <strong>${(prof.cohesion || 0.82).toFixed(2)}</strong>`;
+
   document.getElementById('right').innerHTML = `
     <section class="panel-card">
       <div class="vid">
         <div class="cat-header">
-          <h4>1 · Perfil / Canal analizado</h4>
-          <span class="cat-method">${nVids} videos</span>
+          <h4>1 · ${isPlaylist ? 'Playlist analizada' : 'Canal analizado'}</h4>
+          <span class="cat-method">${nVids} videos${prof.added_videos ? ` · ${prof.added_videos} nuevos guardados` : ''}</span>
         </div>
         <div style="font:600 20px/1.25 'Newsreader', Georgia, serif;color:var(--text)">${prof.title || prof.query || 'Perfil'}</div>
-        ${prof.subscriber_count != null ? `<div class="channel-line">Suscriptores: <strong>${prof.subscriber_count.toLocaleString('es-CL')}</strong> · Cohesión: <strong>${(prof.cohesion || 0.82).toFixed(2)}</strong></div>` : ''}
+        ${isPlaylist
+          ? `<div class="channel-line">${prof.owner ? `Playlist de <strong>${prof.owner}</strong> · ` : ''}${cohesion}</div>`
+          : (prof.subscriber_count != null ? `<div class="channel-line">Suscriptores: <strong>${prof.subscriber_count.toLocaleString('es-CL')}</strong> · ${cohesion}</div>` : '')}
         ${prof.description ? `<div class="desc-box">${prof.description}</div>` : ''}
       </div>
     </section>
 
     <section class="panel-card">
       <div class="cat-header">
-        <h4>2 · Distribución de tu burbuja</h4>
+        <h4>2 · Distribución ${de}</h4>
         <span class="cat-method">${(knn.breakdown || []).length} de ${colorMode === 'cluster' ? `${D.cats.length} grupos` : `${prof.total_categories || D.cats.length} categorías`}</span>
       </div>
       ${knn.breakdown && knn.breakdown.length ? `
@@ -1947,15 +1989,15 @@ function showRealProfileResult(data) {
 
     <section class="panel-card">
       <div class="cat-header">
-        <h4>3 · Videos afines vs. Fuera de tu burbuja</h4>
+        <h4>3 · Relacionados vs. distantes ${de}</h4>
       </div>
       ${HEATMAP_LEGEND_HTML}
       <div class="nb-tabs">
-        <button id="tab-near" class="on-near" onclick="switchNeighborTab('nearest')">En tu burbuja (${nearCount})</button>
-        <button id="tab-far" onclick="switchNeighborTab('farthest')">Fuera de burbuja (${farCount})</button>
+        <button id="tab-near" class="on-near" onclick="switchNeighborTab('nearest')">Relacionados ${isPlaylist ? 'con la playlist' : 'con el canal'} (${nearCount})</button>
+        <button id="tab-far" onclick="switchNeighborTab('farthest')">Distantes ${de} (${farCount})</button>
       </div>
       <div class="nb-subhint" id="nb-subhint">
-        <span>Mayor afinidad con el centroide del perfil</span><span>d = 1 − sim</span>
+        <span>Mayor afinidad con el centroide ${de}</span><span>d = 1 − sim</span>
       </div>
       <div class="nb" id="nb-list">
         ${renderNeighborCards(data.neighbors || [], false)}
@@ -1982,7 +2024,7 @@ async function runRealProfile(query) {
     const res = await fetch(API_BASE + '/profiles', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ profile: query })
+      body: JSON.stringify({ profile: query, representation: currentRepresentation })
     });
     clearInterval(timer);
     if (!res.ok) {
@@ -1993,6 +2035,7 @@ async function runRealProfile(query) {
     document.getElementById('loading').classList.remove('on');
     const targetPos = showRealProfileResult(data);
     setCamera(targetPos, 24);
+    if ((data.profile || {}).added_videos) refreshAfterAdd();
   } catch (err) {
     clearInterval(timer);
     document.getElementById('loading').classList.remove('on');

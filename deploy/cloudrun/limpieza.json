@@ -1,0 +1,12 @@
+[
+  {
+    "name": "mantener-las-2-ultimas",
+    "action": {"type": "Keep"},
+    "mostRecentVersions": {"keepCount": 2}
+  },
+  {
+    "name": "borrar-el-resto",
+    "action": {"type": "Delete"},
+    "condition": {"tagState": "any"}
+  }
+]

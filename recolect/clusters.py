@@ -6,8 +6,11 @@ versión del mapa para que la web pueda colorear por grupo:
 1. HDBSCAN sobre las coordenadas 3D del mapa (los puntos sueltos quedan como ruido).
 2. Centroide normalizado de cada grupo en el espacio original (768-d); el ruido se
    asigna al centroide más parecido.
-3. Nombre de cada grupo: las 2 etiquetas de YT-8M y los 2 tags (folksonomía) más
-   cercanos a su centroide, sin repetir.
+3. Nombre de cada grupo: hasta 2 etiquetas de YT-8M y tags (folksonomía) cercanos a su
+   centroide, sin repetir, 3 palabras en total. Las etiquetas de YT-8M "comodín" (se parecen
+   a todos los grupos, como "Wat" o "Art") no se usan, y una etiqueta entra solo si es
+   específica del grupo (lo mismo para los tags); si no queda ninguna palabra, el grupo
+   se llama "Variado (sin tema claro)".
 
 Se guarda junto al mapa, en `data/maps*/<versión>/`:
   clusters.parquet   youtube_id, cluster (0..K-1), core (False si era ruido)
@@ -33,9 +36,17 @@ MIN_CLUSTER_SIZE = 220   # grupos grandes y legibles
 MIN_SAMPLES = 30         # más alto = más puntos quedan como ruido
 # El mapa de miniaturas es más continuo: con "eom" HDBSCAN lo deja casi en un solo grupo,
 # así que ahí se eligen las hojas del árbol de densidad (~40 grupos, como en texto).
-SELECTION = {"text": "eom", "image": "leaf"}
+SELECTION = {"text": "eom", "image": "leaf", "imgtext": "eom", "fusion": "eom"}
+# Etiquetas de YT-8M: se descarta este % de las más parecidas en promedio a todos los grupos,
+# y de las demás se usan solo las que superan a su promedio por al menos MIN_SPECIFICITY.
+# Calibrado en el mapa de nov-2026: los nombres sin sentido ("Ale", "Pub") quedaban bajo 0,03.
+VOCAB_HUB_PCT = 0.5
+MIN_SPECIFICITY = 0.03
 GENERIC_TAGS = {"video", "videos", "youtube", "new", "the", "and", "for", "with", "how", "live", "full",
-                "free", "hd", "official", "part", "episode", "best", "top", "clip", "show"}
+                "free", "hd", "official", "part", "episode", "best", "top", "clip", "show",
+                # relleno que llega con los videos recibidos (otros idiomas, "none" como tag vacío)
+                "none", "para", "con", "los", "las", "del", "que", "por", "una", "view", "part 2",
+                "vídeo", "vídeos", "vidéo", "видео"}
 
 
 def _normalize(matrix: np.ndarray) -> np.ndarray:
@@ -43,14 +54,25 @@ def _normalize(matrix: np.ndarray) -> np.ndarray:
 
 
 def folksonomy(ids: list[str], vectors: np.ndarray, data_dir) -> tuple[np.ndarray, np.ndarray]:
-    """Prototipo de cada tag frecuente: el centroide de los videos que lo usan (8–800 videos)."""
+    """Prototipo de cada tag frecuente: el centroide de los videos que lo usan (8–800 videos).
+
+    Usa los tags de los videos base y también los de los recibidos por la web: así un tema que
+    llegó después (p. ej. canales de matemáticas) puede nombrar su grupo con sus propios tags.
+    """
+    from .received import ReceivedStore, store_path
+
     position = {video_id: i for i, video_id in enumerate(ids)}
     tags = pd.read_parquet(Path(data_dir) / "yt8m_hydrated.parquet", columns=["youtube_id", "tags"])
+    pairs = list(zip(tags["youtube_id"], tags["tags"]))
+    if store_path(data_dir).exists():
+        pairs += [(r["youtube_id"], r["metadata"].get("tags")) for r in ReceivedStore(store_path(data_dir)).all()]
     rows_of = defaultdict(list)
-    for video_id, video_tags in zip(tags["youtube_id"], tags["tags"]):
+    seen = set()
+    for video_id, video_tags in pairs:
         i = position.get(video_id)
-        if i is None or not isinstance(video_tags, (list, np.ndarray)):
+        if i is None or i in seen or not isinstance(video_tags, (list, np.ndarray)):
             continue
+        seen.add(i)
         for tag in {str(t).strip().lower() for t in video_tags}:
             if 3 <= len(tag) <= 28 and tag not in GENERIC_TAGS and not tag.isdigit():
                 rows_of[tag].append(i)
@@ -77,15 +99,26 @@ def cluster_map(ids: list[str], vectors: np.ndarray, coords: np.ndarray, data_di
     vocab_vectors = np.stack(vocab["emb"].to_numpy()).astype(np.float32)
     folk_names, folk_vectors = folksonomy(ids, vectors, data_dir)
 
+    vocab_sims = centroids @ vocab_vectors.T                  # (grupos, etiquetas)
+    hub = vocab_sims.mean(axis=0)                              # parecido promedio a todos los grupos
+    vocab_sims[:, np.argsort(-hub)[:int(len(vocab_names) * VOCAB_HUB_PCT / 100)]] = -np.inf
+    folk_sims = centroids @ folk_vectors.T
+    folk_hub = folk_sims.mean(axis=0)
+
     summary = []
     for c in range(k):
-        candidates = [*vocab_names[np.argsort(-(vocab_vectors @ centroids[c]))[:2]],
-                      *folk_names[np.argsort(-(folk_vectors @ centroids[c]))[:2]]]
+        vocab_words = [vocab_names[j] for j in np.argsort(-vocab_sims[c])[:2]
+                       if vocab_sims[c, j] - hub[j] >= MIN_SPECIFICITY]
+        folk_words = [folk_names[j] for j in np.argsort(-folk_sims[c])[:3]
+                      if folk_sims[c, j] - folk_hub[j] >= MIN_SPECIFICITY]
+        candidates = [*vocab_words, *folk_words]
         words = []
         for word in candidates:
             if word.lower() not in {w.lower() for w in words}:
                 words.append(word)
-        summary.append({"id": c, "name": " · ".join(words[:3]), "size": int((assigned == c).sum())})
+        # sin ninguna palabra específica es un grupo de relleno (videos dispares o sin metadatos)
+        name = " · ".join(words[:3]) or "Variado (sin tema claro)"
+        summary.append({"id": c, "name": name, "size": int((assigned == c).sum())})
 
     table = pd.DataFrame({"youtube_id": ids, "cluster": assigned.astype(np.int16), "core": ~noise})
     return table, centroids, summary
@@ -128,7 +161,7 @@ def cluster_current(data_dir="data", representation="text") -> None:
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--data", default="data", help="carpeta de datos (data o data/dev)")
-    parser.add_argument("--rep", default="text", choices=("text", "image"), help="mapa de texto o de miniaturas")
+    parser.add_argument("--rep", default="text", choices=("text", "image", "imgtext", "fusion"), help="mapa de texto, de miniaturas o de fusión")
     args = parser.parse_args()
     cluster_current(args.data, args.rep)
 

@@ -1,0 +1,15 @@
+# Copiar a /etc/caddy/Caddyfile en el servidor y recargar:  sudo systemctl reload caddy
+#
+# Paso 1 (sin dominio, solo HTTP): deja este bloque tal cual y entra a http://<IP-pública>
+:80 {
+	encode gzip
+	reverse_proxy 127.0.0.1:8000
+}
+
+# Paso 2 (con dominio, HTTPS automático): reemplaza el bloque de arriba por este,
+# con tu dominio (p. ej. un subdominio gratis de duckdns.org apuntando a la IP pública).
+#
+# mapa-youtube.duckdns.org {
+# 	encode gzip
+# 	reverse_proxy 127.0.0.1:8000
+# }

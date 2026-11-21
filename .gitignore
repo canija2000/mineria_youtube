@@ -26,3 +26,6 @@ entregas/
 
 # paquete de datos para los notebooks (se comparte aparte, ver README)
 mineria_youtube_datos.zip
+
+# contexto de la imagen de Cloud Run (deploy/cloudrun/preparar.sh)
+build/

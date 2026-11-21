@@ -1,5 +1,7 @@
 # Publicar la web en Hugging Face Spaces
 
+> **Ojo:** desde fines de 2026 los Spaces con Docker en CPU gratis requieren la suscripción PRO (al crear el Space responde `402 Payment Required`). La alternativa gratis está en [despliegue_oracle.md](despliegue_oracle.md).
+
 Un *Space* con SDK **Docker** construye el `Dockerfile` del repo y deja la web en
 `https://<usuario>-<space>.hf.space`. El plan gratuito (CPU basic) alcanza: el servidor usa ~2–3 GB de RAM.
 

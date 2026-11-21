@@ -8,6 +8,7 @@ from pathlib import Path
 import re
 from urllib.parse import parse_qs, urlparse
 
+import numpy as np
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
@@ -16,6 +17,7 @@ from starlette.staticfiles import StaticFiles
 
 from recolect.embedding import TextEmbedder, build_text
 from recolect.youtube import fetch_profile_videos, fetch_video
+from . import persistencia
 from .catalog import VideoCatalog
 
 VIDEO_ID_RE = re.compile(r"^[A-Za-z0-9_-]{11}$")
@@ -24,7 +26,7 @@ URL_RE = re.compile(r"(?:youtu\.be/|youtube\.com/(?:watch\?v=|embed/|shorts/))([
 
 class AddVideoRequest(BaseModel):
     video: str = Field(min_length=11, max_length=2048, description="ID o URL de YouTube")
-    representation: str = Field(default="text", description="Espacio de representación: text o image")
+    representation: str = Field(default="text", description="Espacio de representación: text, image, imgtext (fusión temprana) o fusion (fusión tardía)")
 
 
 class ConceptRequest(BaseModel):
@@ -39,12 +41,15 @@ class ImageSearchRequest(BaseModel):
 
 class ProfileRequest(BaseModel):
     profile: str = Field(min_length=2, max_length=2048, description="@handle, URL de canal o playlist de YouTube")
+    representation: str = Field(default="fusion", description="Espacio: text, image, imgtext o fusion")
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # MAPA_DATA=data/dev permite probar el servidor con los datos del modo prueba.
-    app.state.catalog = VideoCatalog(os.getenv("MAPA_DATA", "data"))
+    data_dir = os.getenv("MAPA_DATA", "data")
+    persistencia.restaurar(data_dir)   # en Cloud Run: trae los videos recibidos guardados en el bucket
+    app.state.catalog = VideoCatalog(data_dir)
     app.state.embedder = TextEmbedder()
     yield
 
@@ -91,7 +96,7 @@ def health():
 
 @app.get("/map")
 def get_map(rep: str = "text"):
-    """Todos los puntos del mapa vigente (texto o imagen) para que la web los dibuje."""
+    """Todos los puntos del mapa vigente (texto, imagen o fusión) para que la web los dibuje."""
     catalog = app.state.catalog
     catalog.refresh_map()
     return catalog.map_payload(representation=rep)
@@ -101,7 +106,7 @@ def _save_thumbnail(video_id: str) -> Path:
     """Guarda la miniatura del video en data/thumbs/ (las de los videos ingresados sí se conservan;
     lo que no se guarda son las imágenes sueltas de /images)."""
     import requests
-    thumb_dir = Path(os.getenv("MAPA_DATA", "data")) / "thumbs"
+    thumb_dir = persistencia.carpeta_miniaturas(os.getenv("MAPA_DATA", "data"))
     thumb_dir.mkdir(parents=True, exist_ok=True)
     thumb_path = thumb_dir / f"{video_id}.jpg"
     if not thumb_path.exists() or thumb_path.stat().st_size <= 1000:
@@ -111,22 +116,82 @@ def _save_thumbnail(video_id: str) -> Path:
     return thumb_path
 
 
+def _save_thumbnails(video_ids: list[str]) -> None:
+    """Descarga en paralelo las miniaturas de un lote de videos; si alguna falla, el video igual queda."""
+    from concurrent.futures import ThreadPoolExecutor
+
+    def bajar(video_id):
+        try:
+            _save_thumbnail(video_id)
+        except Exception as exc:
+            print(f"[miniatura] no se pudo guardar la de {video_id}: {exc}", flush=True)
+
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        list(pool.map(bajar, video_ids))
+
+
 def _register_video(video_id: str, metadata: dict, catalog: VideoCatalog) -> None:
     """Agrega al catálogo un video que llega por primera vez: metadatos, vector de texto y miniatura."""
     if catalog.has(video_id):
         return
     vector = app.state.embedder.encode([build_text(metadata)])[0]
     catalog.add(video_id, metadata, vector)
+    persistencia.guardar(os.getenv("MAPA_DATA", "data"))
     try:
         _save_thumbnail(video_id)
     except Exception as exc:  # sin miniatura el video igual queda en el catálogo
         print(f"[miniatura] no se pudo guardar la de {video_id}: {exc}", flush=True)
 
 
-def _encode_video_thumbnail(video_id: str, embedder: TextEmbedder):
-    thumb_path = _save_thumbnail(video_id)
-    embedder.enable_images()
-    return embedder.encode([{"image": [str(thumb_path)]}], batch_size=1, prompt_name=None)[0]
+def _unit(vector) -> np.ndarray:
+    vector = np.asarray(vector, dtype=np.float32).reshape(-1)
+    return vector / max(float(np.linalg.norm(vector)), 1e-12)
+
+
+def _space_vectors(rep: str, videos: list[dict], text_vectors, catalog: VideoCatalog) -> np.ndarray:
+    """Vectores de un lote de videos en un mapa de solo videos base (imagen o fusión).
+
+    Se calculan igual que en recolect/modalities.py. Por orden de preferencia, cada vector sale de:
+    1. el mapa, si el video es uno de sus videos base;
+    2. la SQLite (`space_vectors`), si ya se calculó en una consulta anterior;
+    3. el modelo: se baja la miniatura, se embebe y se guarda en la SQLite para la próxima vez.
+    La fusión tardía no se guarda: es la suma normalizada del vector de texto y el de imagen.
+    """
+    space = catalog.spaces[rep]
+    kind = "imgtext" if rep == "imgtext" else "image"   # lo que hay que embeber (y guardar)
+    ids = [v["youtube_id"] for v in videos]
+    out = np.zeros((len(videos), np.asarray(text_vectors).shape[1]), dtype=np.float32)
+    faltan = [k for k, video_id in enumerate(ids) if video_id not in space.positions]
+    for k, video_id in enumerate(ids):
+        if video_id in space.positions:
+            out[k] = space.vectors[space.positions[video_id]]
+    guardados = catalog.store.space_vectors(kind, [ids[k] for k in faltan]) if faltan else {}
+    por_embeber = [k for k in faltan if ids[k] not in guardados]
+    if por_embeber:
+        _save_thumbnails([ids[k] for k in por_embeber])
+        thumbs = {k: _save_thumbnail(ids[k]) for k in por_embeber}   # ya descargadas: solo da la ruta
+        embedder = app.state.embedder
+        embedder.enable_images()
+        if kind == "imgtext":   # fusión temprana: miniatura y texto en una sola pasada del modelo
+            entradas = [{"text": f"task: clustering | query: <|image|> {build_text(videos[k])}",
+                         "image": [str(thumbs[k])]} for k in por_embeber]
+        else:
+            entradas = [{"image": [str(thumbs[k])]} for k in por_embeber]
+        nuevos = embedder.encode(entradas, batch_size=8, prompt_name=None)
+        calculados = {ids[k]: np.asarray(vec, dtype=np.float32) for k, vec in zip(por_embeber, nuevos)}
+        catalog.store.add_space_vectors(kind, calculados)
+        persistencia.guardar(os.getenv("MAPA_DATA", "data"))
+        guardados.update(calculados)
+    for k in faltan:
+        vec = guardados[ids[k]]
+        out[k] = _unit(_unit(text_vectors[k]) + _unit(vec)) if rep == "fusion" else vec
+    return out
+
+
+def _space_vector(rep: str, video_id: str, metadata: dict, catalog: VideoCatalog) -> np.ndarray:
+    """Vector de un video en un mapa de solo videos base (ver _space_vectors)."""
+    text_vector = catalog.vectors[catalog.positions[video_id]]
+    return _space_vectors(rep, [{"youtube_id": video_id, **metadata}], text_vector.reshape(1, -1), catalog)[0]
 
 
 @app.post("/videos", status_code=201)
@@ -136,16 +201,17 @@ def add_video(payload: AddVideoRequest):
     catalog = app.state.catalog
     catalog.refresh_map()
 
-    if rep == "image":
-        if video_id in catalog.image_positions:
-            return catalog.describe_image(video_id)
+    if rep in catalog.spaces:
+        if video_id in catalog.spaces[rep].positions:
+            return catalog.describe_static(video_id, rep)
         try:
-            metadata = catalog.metadata.get(video_id) or fetch_video(video_id)
+            # metadatos completos (con tags): del catálogo de recibidos si ya llegó antes, si no de la API
+            metadata = catalog.store.get(video_id) or fetch_video(video_id)
             if metadata is None:
                 raise HTTPException(status_code=404, detail="El video no existe o no está disponible")
             _register_video(video_id, metadata, catalog)   # queda guardado igual que en modo texto
-            img_vec = _encode_video_thumbnail(video_id, app.state.embedder)
-            return catalog.describe_image(video_id, metadata=metadata, image_vector=img_vec)
+            vector = _space_vector(rep, video_id, metadata, catalog)
+            return catalog.describe_static(video_id, rep, metadata=metadata, vector=vector)
         except HTTPException:
             raise
         except Exception as exc:
@@ -252,7 +318,19 @@ def analyze_profile(payload: ProfileRequest):
         profile_info, videos = res
         texts = [build_text(v) for v in videos]
         vectors = app.state.embedder.encode(texts, batch_size=32)
-        return catalog.locate_profile(profile_info, videos, vectors)
+        # Los videos del canal ya están descargados y con vector: quedan guardados como recibidos.
+        nuevos = catalog.add_many([(v["youtube_id"], v, vec) for v, vec in zip(videos, vectors)])
+        if nuevos:
+            persistencia.guardar(os.getenv("MAPA_DATA", "data"))
+            _save_thumbnails(nuevos)
+        rep = (payload.representation or "text").strip().lower()
+        if rep in catalog.spaces and catalog.spaces[rep].ready:
+            space_vectors = _space_vectors(rep, videos, vectors, catalog)
+            result = catalog.locate_profile(profile_info, videos, space_vectors, space=rep)
+        else:
+            result = catalog.locate_profile(profile_info, videos, vectors)
+        result["profile"]["added_videos"] = len(nuevos)
+        return result
     except HTTPException:
         raise
     except Exception as exc:

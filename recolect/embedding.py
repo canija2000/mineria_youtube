@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import re
 import time
 from pathlib import Path
@@ -11,7 +12,8 @@ import pandas as pd
 import torch
 from sentence_transformers import SentenceTransformer
 
-MODEL_NAME = "google/embeddinggemma-2"
+# MAPA_MODELO permite usar una copia local del modelo (la imagen de Cloud Run la trae adentro)
+MODEL_NAME = os.getenv("MAPA_MODELO", "google/embeddinggemma-2")
 URL_RE = re.compile(r"https?://\S+|www\.\S+")
 WS_RE = re.compile(r"\s+")
 

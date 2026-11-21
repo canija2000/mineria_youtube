@@ -1,0 +1,168 @@
+<mxfile host="app.diagrams.net">
+  <diagram id="mapa" name="Flujo de datos">
+    <mxGraphModel dx="3217" dy="1567" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1420" pageHeight="840" background="#ffffff" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="st1" parent="1" style="text;html=1;align=left;verticalAlign=middle;fontSize=11;fontColor=#3333FF;fontFamily=IBM Plex Mono;fontSource=https%3A%2F%2Ffonts.googleapis.com%2Fcss%3Ffamily%3DIBM%2BPlex%2BMono;" value="&lt;b&gt;1 · TEXTO&lt;/b&gt;" vertex="1">
+          <mxGeometry height="20" width="200" x="-110" y="20" as="geometry" />
+        </mxCell>
+        <mxCell id="st2" parent="1" style="text;html=1;align=left;verticalAlign=middle;fontSize=11;fontColor=#3333FF;fontFamily=IBM Plex Mono;fontSource=https%3A%2F%2Ffonts.googleapis.com%2Fcss%3Ffamily%3DIBM%2BPlex%2BMono;" value="&lt;b&gt;2 · VECTOR 768-d&lt;/b&gt;" vertex="1">
+          <mxGeometry height="20" width="220" x="260" y="20" as="geometry" />
+        </mxCell>
+        <mxCell id="st3" parent="1" style="text;html=1;align=left;verticalAlign=middle;fontSize=11;fontColor=#3333FF;fontFamily=IBM Plex Mono;fontSource=https%3A%2F%2Ffonts.googleapis.com%2Fcss%3Ffamily%3DIBM%2BPlex%2BMono;" value="&lt;b&gt;3 · MAPA&amp;nbsp;&lt;/b&gt;" vertex="1">
+          <mxGeometry height="20" width="300" x="820" y="20" as="geometry" />
+        </mxCell>
+        <mxCell id="st4" parent="1" style="text;html=1;align=left;verticalAlign=middle;fontSize=11;fontColor=#3333FF;fontFamily=IBM Plex Mono;fontSource=https%3A%2F%2Ffonts.googleapis.com%2Fcss%3Ffamily%3DIBM%2BPlex%2BMono;" value="&lt;b&gt;4 · SERVIDOR · WEB&lt;/b&gt;" vertex="1">
+          <mxGeometry height="20" width="220" x="1120" y="20" as="geometry" />
+        </mxCell>
+        <mxCell id="frame" parent="1" style="rounded=0;html=1;fillColor=none;strokeColor=#1F0711;dashed=1;dashPattern=2 4;" value="" vertex="1">
+          <mxGeometry height="456" width="252" x="744" y="56" as="geometry" />
+        </mxCell>
+        <mxCell id="yt" parent="1" style="rounded=0;whiteSpace=wrap;html=1;align=left;verticalAlign=top;spacingLeft=8;spacingRight=8;spacingTop=2;fontSize=12;strokeColor=#1c1d1f;strokeWidth=1.2;fillColor=#ffffff;fontColor=#1c1d1f;fontFamily=IBM Plex Mono;fontSource=https%3A%2F%2Ffonts.googleapis.com%2Fcss%3Ffamily%3DIBM%2BPlex%2BMono;" value="&lt;b&gt;yt8m_hydrated&lt;/b&gt;&lt;span style=&quot;float: right; color: rgb(116, 119, 124); font-size: 11px;&quot;&gt;&amp;nbsp; 34.788&lt;/span&gt;&lt;hr style=&quot;border-width: 1px medium medium; border-style: solid none none; border-color: rgb(154, 158, 164) currentcolor currentcolor; border-image: none; margin: 4px -8px;&quot;&gt;&lt;b style=&quot;color: rgb(192, 57, 43);&quot;&gt;K&lt;/b&gt;&amp;nbsp; &lt;span style=&quot;color: rgb(255, 22, 22);&quot;&gt;youtube_id&lt;br&gt;&lt;/span&gt;&lt;b style=&quot;color: rgb(154, 106, 16);&quot;&gt;T&lt;/b&gt;&amp;nbsp; título · tags · desc&lt;br&gt;&lt;b style=&quot;color: rgb(142, 68, 173);&quot;&gt;G&lt;/b&gt;&amp;nbsp; labels → categoría" vertex="1">
+          <mxGeometry height="94" width="220" x="-110" y="96" as="geometry" />
+        </mxCell>
+        <mxCell id="nv" parent="1" style="rounded=0;whiteSpace=wrap;html=1;align=left;verticalAlign=top;spacingLeft=8;spacingRight=8;spacingTop=2;fontSize=12;strokeColor=#1c1d1f;strokeWidth=1.2;fillColor=#ffffff;fontColor=#1c1d1f;fontFamily=IBM Plex Mono;fontSource=https%3A%2F%2Ffonts.googleapis.com%2Fcss%3Ffamily%3DIBM%2BPlex%2BMono;" value="&lt;b&gt;videos nuevos&amp;nbsp; &amp;nbsp;&lt;/b&gt;&lt;span style=&quot;float: right; color: rgb(116, 119, 124); font-size: 11px;&quot;&gt;web - Kaggle&lt;/span&gt;&lt;hr style=&quot;border-width: 1px medium medium; border-style: solid none none; border-color: rgb(154, 158, 164) currentcolor currentcolor; border-image: none; margin: 4px -8px;&quot;&gt;&lt;b style=&quot;color: rgb(192, 57, 43);&quot;&gt;K&lt;/b&gt;&amp;nbsp; &lt;span style=&quot;color: rgb(255, 22, 22);&quot;&gt;youtube_id&lt;/span&gt;&lt;br&gt;&lt;b style=&quot;color: rgb(154, 106, 16);&quot;&gt;T&lt;/b&gt;&amp;nbsp; título · tags · desc" vertex="1">
+          <mxGeometry height="76" width="220" x="-110" y="299" as="geometry" />
+        </mxCell>
+        <mxCell id="et" parent="1" style="rounded=0;whiteSpace=wrap;html=1;align=left;verticalAlign=top;spacingLeft=8;spacingRight=8;spacingTop=2;fontSize=12;strokeColor=#1c1d1f;strokeWidth=1.2;fillColor=#ffffff;fontColor=#1c1d1f;fontFamily=IBM Plex Mono;fontSource=https%3A%2F%2Ffonts.googleapis.com%2Fcss%3Ffamily%3DIBM%2BPlex%2BMono;" value="&lt;b&gt;emb_text.parquet&amp;nbsp; &amp;nbsp; &amp;nbsp; &amp;nbsp;&amp;nbsp;&lt;/b&gt;&lt;span style=&quot;float: right; color: rgb(116, 119, 124); font-size: 11px;&quot;&gt;base&lt;/span&gt;&lt;hr style=&quot;border-width: 1px medium medium; border-style: solid none none; border-color: rgb(154, 158, 164) currentcolor currentcolor; border-image: none; margin: 4px -8px;&quot;&gt;&lt;b style=&quot;color: rgb(192, 57, 43);&quot;&gt;K&lt;/b&gt;&amp;nbsp; &lt;span style=&quot;background-color: rgb(255, 254, 252); color: rgb(255, 22, 22);&quot;&gt;youtube_id&lt;/span&gt;&lt;br&gt;&lt;b style=&quot;color: rgb(36, 86, 184);&quot;&gt;V&lt;/b&gt;&amp;nbsp; emb [768]" vertex="1">
+          <mxGeometry height="76" width="220" x="250" y="105" as="geometry" />
+        </mxCell>
+        <mxCell id="rc" parent="1" style="rounded=0;whiteSpace=wrap;html=1;align=left;verticalAlign=top;spacingLeft=8;spacingRight=8;spacingTop=2;fontSize=12;strokeColor=#1c1d1f;strokeWidth=1.2;fillColor=#ffffff;fontColor=#1c1d1f;fontFamily=IBM Plex Mono;fontSource=https%3A%2F%2Ffonts.googleapis.com%2Fcss%3Ffamily%3DIBM%2BPlex%2BMono;" value="&lt;b&gt;received · SQLite&amp;nbsp; &amp;nbsp; &amp;nbsp;&amp;nbsp;&lt;/b&gt;&lt;span style=&quot;float: right; color: rgb(116, 119, 124); font-size: 11px;&quot;&gt;9.991&lt;/span&gt;&lt;hr style=&quot;border-width: 1px medium medium; border-style: solid none none; border-color: rgb(154, 158, 164) currentcolor currentcolor; border-image: none; margin: 4px -8px;&quot;&gt;&lt;b style=&quot;color: rgb(192, 57, 43);&quot;&gt;K&lt;/b&gt;&amp;nbsp; &lt;span style=&quot;color: rgb(255, 22, 22);&quot;&gt;youtube_id&lt;/span&gt;  PK&lt;br&gt;&lt;b style=&quot;color: rgb(154, 106, 16);&quot;&gt;T&lt;/b&gt;&amp;nbsp; metadata_json&lt;br&gt;&lt;b style=&quot;color: rgb(36, 86, 184);&quot;&gt;V&lt;/b&gt;&amp;nbsp; embedding [768]" vertex="1">
+          <mxGeometry height="94" width="220" x="248" y="290" as="geometry" />
+        </mxCell>
+        <mxCell id="rm" parent="1" style="rounded=0;whiteSpace=wrap;html=1;align=left;verticalAlign=top;spacingLeft=8;spacingRight=8;spacingTop=2;fontSize=12;strokeColor=#d79b00;strokeWidth=1.2;fillColor=#ffe6cc;fontFamily=IBM Plex Mono;fontSource=https%3A%2F%2Ffonts.googleapis.com%2Fcss%3Ffamily%3DIBM%2BPlex%2BMono;" value="&lt;b&gt;remap.py&amp;nbsp; &amp;nbsp; &amp;nbsp; &amp;nbsp;&lt;/b&gt;&lt;hr style=&quot;border-width: 1px medium medium; border-style: solid none none; border-color: rgb(154, 158, 164) currentcolor currentcolor; border-image: none; margin: 4px -8px;&quot;&gt;&lt;b style=&quot;color: rgb(30, 132, 73);&quot;&gt;C&lt;/b&gt;&amp;nbsp; UMAP&lt;br&gt;&lt;b style=&quot;color: rgb(142, 68, 173);&quot;&gt;G&lt;/b&gt;&amp;nbsp; HDBSCAN" vertex="1">
+          <mxGeometry height="76" width="130" x="570" y="196" as="geometry" />
+        </mxCell>
+        <mxCell id="rm_lbl" parent="1" style="text;html=1;align=center;verticalAlign=middle;fontSize=11;fontColor=#74777c;fontFamily=IBM Plex Mono;fontSource=https%3A%2F%2Ffonts.googleapis.com%2Fcss%3Ffamily%3DIBM%2BPlex%2BMono;" value="fila i → fila i" vertex="1">
+          <mxGeometry height="20" width="150" x="556" y="289" as="geometry" />
+        </mxCell>
+        <mxCell id="co" parent="1" style="rounded=0;whiteSpace=wrap;html=1;align=left;verticalAlign=top;spacingLeft=8;spacingRight=8;spacingTop=2;fontSize=12;strokeColor=#82b366;strokeWidth=1.2;fillColor=light-dark(#edfded, #1f2f1e);fontFamily=IBM Plex Mono;fontSource=https%3A%2F%2Ffonts.googleapis.com%2Fcss%3Ffamily%3DIBM%2BPlex%2BMono;" value="&lt;b&gt;coords.parquet&amp;nbsp; &amp;nbsp; &amp;nbsp; &amp;nbsp;&lt;/b&gt;&lt;span style=&quot;float: right; color: rgb(116, 119, 124); font-size: 11px;&quot;&gt;44.779&lt;/span&gt;&lt;hr style=&quot;border-width: 1px medium medium; border-style: solid none none; border-color: rgb(154, 158, 164) currentcolor currentcolor; border-image: none; margin: 4px -8px;&quot;&gt;&lt;b style=&quot;color: rgb(192, 57, 43);&quot;&gt;K&lt;/b&gt;&amp;nbsp; &lt;span style=&quot;color: rgb(255, 22, 22);&quot;&gt;youtube_id&lt;/span&gt;&lt;br&gt;&lt;b style=&quot;color: rgb(30, 132, 73);&quot;&gt;C&lt;/b&gt;&amp;nbsp; x · y · z" vertex="1">
+          <mxGeometry height="76" width="220" x="760" y="72" as="geometry" />
+        </mxCell>
+        <mxCell id="cl" parent="1" style="rounded=0;whiteSpace=wrap;html=1;align=left;verticalAlign=top;spacingLeft=8;spacingRight=8;spacingTop=2;fontSize=12;strokeColor=#1c1d1f;strokeWidth=1.2;fillColor=#ffffff;fontColor=#1c1d1f;fontFamily=IBM Plex Mono;fontSource=https%3A%2F%2Ffonts.googleapis.com%2Fcss%3Ffamily%3DIBM%2BPlex%2BMono;" value="&lt;b&gt;clusters.parquet&lt;/b&gt;&lt;hr style=&quot;border-width: 1px medium medium; border-style: solid none none; border-color: rgb(154, 158, 164) currentcolor currentcolor; border-image: none; margin: 4px -8px;&quot;&gt;&lt;b style=&quot;color: rgb(192, 57, 43);&quot;&gt;K&lt;/b&gt;&amp;nbsp; &lt;span style=&quot;color: rgb(255, 22, 22);&quot;&gt;youtube_id&lt;/span&gt;&lt;br&gt;&lt;b style=&quot;color: rgb(142, 68, 173);&quot;&gt;G&lt;/b&gt;&amp;nbsp; cluster" vertex="1">
+          <mxGeometry height="76" width="220" x="760" y="162" as="geometry" />
+        </mxCell>
+        <mxCell id="cj" parent="1" style="rounded=0;whiteSpace=wrap;html=1;align=left;verticalAlign=top;spacingLeft=8;spacingRight=8;spacingTop=2;fontSize=12;strokeColor=#56517e;strokeWidth=1.2;fillColor=light-dark(#eae7fd, #3b394a);fontFamily=IBM Plex Mono;fontSource=https%3A%2F%2Ffonts.googleapis.com%2Fcss%3Ffamily%3DIBM%2BPlex%2BMono;" value="&lt;b&gt;clusters.json&lt;/b&gt;&lt;span style=&quot;float: right; color: rgb(116, 119, 124); font-size: 11px;&quot;&gt;&amp;nbsp; &amp;nbsp; &amp;nbsp; &amp;nbsp; &amp;nbsp; &amp;nbsp; &amp;nbsp;51&lt;/span&gt;&lt;hr style=&quot;border-width: 1px medium medium; border-style: solid none none; border-color: rgb(154, 158, 164) currentcolor currentcolor; border-image: none; margin: 4px -8px;&quot;&gt;&lt;b style=&quot;color: rgb(142, 68, 173);&quot;&gt;G&lt;/b&gt;&amp;nbsp; id&lt;br&gt;&lt;b style=&quot;color: rgb(154, 106, 16);&quot;&gt;T&lt;/b&gt;&amp;nbsp; name&lt;br&gt;&lt;b style=&quot;color: rgb(61, 112, 128);&quot;&gt;N&lt;/b&gt;&amp;nbsp; size" vertex="1">
+          <mxGeometry height="94" width="220" x="760" y="252" as="geometry" />
+        </mxCell>
+        <mxCell id="ce" parent="1" style="rounded=0;whiteSpace=wrap;html=1;align=left;verticalAlign=top;spacingLeft=8;spacingRight=8;spacingTop=2;fontSize=12;strokeColor=#1c1d1f;strokeWidth=1.2;fillColor=#ffffff;fontColor=#1c1d1f;fontFamily=IBM Plex Mono;fontSource=https%3A%2F%2Ffonts.googleapis.com%2Fcss%3Ffamily%3DIBM%2BPlex%2BMono;" value="&lt;b&gt;centroids.npy&lt;/b&gt;&lt;hr style=&quot;border:none;border-top:1px solid #9a9ea4;margin:4px -8px 4px -8px&quot;&gt;&lt;b style=&quot;color:#2456b8&quot;&gt;V&lt;/b&gt;&amp;nbsp; fila g [768]" vertex="1">
+          <mxGeometry height="58" width="220" x="760" y="362" as="geometry" />
+        </mxCell>
+        <mxCell id="rd" parent="1" style="rounded=0;whiteSpace=wrap;html=1;align=left;verticalAlign=top;spacingLeft=8;spacingRight=8;spacingTop=2;fontSize=12;strokeColor=#1c1d1f;strokeWidth=1.2;fillColor=#ffffff;fontColor=#1c1d1f;fontFamily=IBM Plex Mono;fontSource=https%3A%2F%2Ffonts.googleapis.com%2Fcss%3Ffamily%3DIBM%2BPlex%2BMono;" value="&lt;b&gt;reducer.joblib&amp;nbsp; &amp;nbsp; &amp;nbsp; &amp;nbsp;&amp;nbsp;&lt;/b&gt;&lt;span style=&quot;float: right; color: rgb(116, 119, 124); font-size: 11px;&quot;&gt;480 MB&lt;/span&gt;&lt;hr style=&quot;border-width: 1px medium medium; border-style: solid none none; border-color: rgb(154, 158, 164) currentcolor currentcolor; border-image: none; margin: 4px -8px;&quot;&gt;&lt;b style=&quot;color: rgb(85, 85, 85);&quot;&gt;M&lt;/b&gt;&amp;nbsp; modelo UMAP" vertex="1">
+          <mxGeometry height="58" width="220" x="760" y="436" as="geometry" />
+        </mxCell>
+        <mxCell id="mem" parent="1" style="rounded=0;whiteSpace=wrap;html=1;align=left;verticalAlign=top;spacingLeft=8;spacingRight=8;spacingTop=2;fontSize=12;strokeColor=#1c1d1f;strokeWidth=1.2;fillColor=#ffffff;fontColor=#1c1d1f;fontFamily=IBM Plex Mono;fontSource=https%3A%2F%2Ffonts.googleapis.com%2Fcss%3Ffamily%3DIBM%2BPlex%2BMono;" value="&lt;b&gt;catalog.py&amp;nbsp; &amp;nbsp; &amp;nbsp; &amp;nbsp;memoria&lt;/b&gt;&lt;hr style=&quot;border-width: 1px medium medium; border-style: solid none none; border-color: rgb(154, 158, 164) currentcolor currentcolor; border-image: none; margin: 4px -8px;&quot;&gt;&lt;b style=&quot;color: rgb(192, 57, 43);&quot;&gt;K&lt;/b&gt;&amp;nbsp; &lt;span style=&quot;color: rgb(255, 22, 22);&quot;&gt;ids[i]&lt;/span&gt;&lt;br&gt;&lt;b style=&quot;color: rgb(36, 86, 184);&quot;&gt;V&lt;/b&gt;&amp;nbsp; vectors[i]&lt;br&gt;&lt;b style=&quot;color: rgb(30, 132, 73);&quot;&gt;C&lt;/b&gt;&amp;nbsp; coords[i]&lt;br&gt;&lt;b style=&quot;color: rgb(142, 68, 173);&quot;&gt;G&lt;/b&gt;&amp;nbsp; cluster[i]" vertex="1">
+          <mxGeometry height="112" width="200" x="1100" y="96" as="geometry" />
+        </mxCell>
+        <mxCell id="api" parent="1" style="rounded=0;whiteSpace=wrap;html=1;align=left;verticalAlign=top;spacingLeft=8;spacingRight=8;spacingTop=2;fontSize=12;strokeColor=#1c1d1f;strokeWidth=1.2;fillColor=#ffffff;fontColor=#1c1d1f;fontFamily=IBM Plex Mono;fontSource=https%3A%2F%2Ffonts.googleapis.com%2Fcss%3Ffamily%3DIBM%2BPlex%2BMono;" value="&lt;b&gt;GET /map&lt;/b&gt;&lt;hr style=&quot;border-width: 1px medium medium; border-style: solid none none; border-color: rgb(154, 158, 164) currentcolor currentcolor; border-image: none; margin: 4px -8px;&quot;&gt;&lt;b style=&quot;color: rgb(192, 57, 43);&quot;&gt;K&lt;/b&gt;&amp;nbsp; &lt;span style=&quot;color: rgb(255, 22, 22);&quot;&gt;youtube_id[i]&lt;/span&gt;&lt;br&gt;&lt;b style=&quot;color: rgb(30, 132, 73);&quot;&gt;C&lt;/b&gt;&amp;nbsp; x[i] y[i] z[i]&lt;br&gt;&lt;b style=&quot;color: rgb(142, 68, 173);&quot;&gt;G&lt;/b&gt;&amp;nbsp; cluster[i]" vertex="1">
+          <mxGeometry height="94" width="200" x="1100" y="268" as="geometry" />
+        </mxCell>
+        <mxCell id="web" parent="1" style="rounded=0;whiteSpace=wrap;html=1;align=left;verticalAlign=top;spacingLeft=8;spacingRight=8;spacingTop=2;fontSize=12;strokeColor=#1c1d1f;strokeWidth=1.2;fillColor=#ffffff;fontColor=#1c1d1f;fontFamily=IBM Plex Mono;fontSource=https%3A%2F%2Ffonts.googleapis.com%2Fcss%3Ffamily%3DIBM%2BPlex%2BMono;" value="&lt;b&gt;web · three.js&lt;/b&gt;&lt;hr style=&quot;border:none;border-top:1px solid #9a9ea4;margin:4px -8px 4px -8px&quot;&gt;&lt;b style=&quot;color:#1e8449&quot;&gt;C&lt;/b&gt;&amp;nbsp; punto P[i]&lt;br&gt;&lt;b style=&quot;color:#c0392b&quot;&gt;K&lt;/b&gt;&amp;nbsp; D.ids[i] → panel" vertex="1">
+          <mxGeometry height="76" width="200" x="1100" y="420" as="geometry" />
+        </mxCell>
+        <mxCell id="e1" edge="1" parent="1" source="yt" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;endSize=6;strokeWidth=1.4;strokeColor=#c0392b;fontSize=11;fontColor=#3333FF;labelBackgroundColor=#ffffff;fontFamily=IBM Plex Mono;fontSource=https%3A%2F%2Ffonts.googleapis.com%2Fcss%3Ffamily%3DIBM%2BPlex%2BMono;" target="et" value="&lt;b&gt;embedding&lt;/b&gt;">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e2" edge="1" parent="1" source="nv" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;endSize=6;strokeWidth=1.4;strokeColor=#c0392b;fontSize=11;fontColor=#3333FF;labelBackgroundColor=#ffffff;fontFamily=IBM Plex Mono;fontSource=https%3A%2F%2Ffonts.googleapis.com%2Fcss%3Ffamily%3DIBM%2BPlex%2BMono;" target="rc" value="&lt;b&gt;embedding&lt;/b&gt;">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e3" edge="1" parent="1" source="et" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;endSize=6;strokeWidth=1.4;strokeColor=#1c1d1f;fontSize=11;fontColor=#74777c;labelBackgroundColor=#ffffff;fontFamily=IBM Plex Mono;fontSource=https%3A%2F%2Ffonts.googleapis.com%2Fcss%3Ffamily%3DIBM%2BPlex%2BMono;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.35;entryDx=0;entryDy=0;" target="rm" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e4" edge="1" parent="1" source="rc" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;endSize=6;strokeWidth=1.4;strokeColor=#1c1d1f;fontSize=11;fontColor=#74777c;labelBackgroundColor=#ffffff;fontFamily=IBM Plex Mono;fontSource=https%3A%2F%2Ffonts.googleapis.com%2Fcss%3Ffamily%3DIBM%2BPlex%2BMono;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.75;entryDx=0;entryDy=0;" target="rm" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e5" edge="1" parent="1" source="rm" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;endSize=6;strokeWidth=1.4;strokeColor=#1c1d1f;fontSize=11;fontColor=#74777c;labelBackgroundColor=#ffffff;fontFamily=IBM Plex Mono;fontSource=https%3A%2F%2Ffonts.googleapis.com%2Fcss%3Ffamily%3DIBM%2BPlex%2BMono;exitX=1;exitY=0.2;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" target="co" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e6" edge="1" parent="1" source="rm" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;endSize=6;strokeWidth=1.4;strokeColor=#1c1d1f;fontSize=11;fontColor=#74777c;labelBackgroundColor=#ffffff;fontFamily=IBM Plex Mono;fontSource=https%3A%2F%2Ffonts.googleapis.com%2Fcss%3Ffamily%3DIBM%2BPlex%2BMono;exitX=1;exitY=0.45;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" target="cl" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e7" edge="1" parent="1" source="rm" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;endSize=6;strokeWidth=1.4;strokeColor=#1c1d1f;fontSize=11;fontColor=#74777c;labelBackgroundColor=#ffffff;fontFamily=IBM Plex Mono;fontSource=https%3A%2F%2Ffonts.googleapis.com%2Fcss%3Ffamily%3DIBM%2BPlex%2BMono;exitX=1;exitY=0.7;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" target="ce" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e8" edge="1" parent="1" source="rm" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;endSize=6;strokeWidth=1.4;strokeColor=#1c1d1f;fontSize=11;fontColor=#74777c;labelBackgroundColor=#ffffff;fontFamily=IBM Plex Mono;fontSource=https%3A%2F%2Ffonts.googleapis.com%2Fcss%3Ffamily%3DIBM%2BPlex%2BMono;exitX=1;exitY=0.9;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" target="rd" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="r1" edge="1" parent="1" source="co" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;endSize=6;strokeWidth=1.4;strokeColor=#c0392b;fontSize=11;fontColor=#74777c;labelBackgroundColor=#ffffff;fontFamily=IBM Plex Mono;fontSource=https%3A%2F%2Ffonts.googleapis.com%2Fcss%3Ffamily%3DIBM%2BPlex%2BMono;exitX=1;exitY=0.55;exitDx=0;exitDy=0;entryX=1;entryY=0.55;entryDx=0;entryDy=0;" target="cl" value="1:1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="r2" edge="1" parent="1" source="cl" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;endSize=6;strokeWidth=1.4;strokeColor=#8e44ad;fontSize=11;fontColor=#74777c;labelBackgroundColor=#ffffff;fontFamily=IBM Plex Mono;fontSource=https%3A%2F%2Ffonts.googleapis.com%2Fcss%3Ffamily%3DIBM%2BPlex%2BMono;exitX=1;exitY=0.8;exitDx=0;exitDy=0;entryX=1;entryY=0.35;entryDx=0;entryDy=0;" target="cj" value="N:1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="r3" edge="1" parent="1" source="cj" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;endSize=6;strokeWidth=1.4;strokeColor=#1c1d1f;fontSize=11;fontColor=#74777c;labelBackgroundColor=#ffffff;fontFamily=IBM Plex Mono;fontSource=https%3A%2F%2Ffonts.googleapis.com%2Fcss%3Ffamily%3DIBM%2BPlex%2BMono;exitX=1;exitY=0.35;exitDx=0;exitDy=0;entryX=1;entryY=0.6;entryDx=0;entryDy=0;" target="ce" value="1:1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e9" edge="1" parent="1" source="co" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;endSize=6;strokeWidth=1.4;strokeColor=#c0392b;fontSize=11;fontColor=#74777c;labelBackgroundColor=#ffffff;fontFamily=IBM Plex Mono;fontSource=https%3A%2F%2Ffonts.googleapis.com%2Fcss%3Ffamily%3DIBM%2BPlex%2BMono;exitX=1;exitY=0.25;exitDx=0;exitDy=0;entryX=0;entryY=0.25;entryDx=0;entryDy=0;" target="mem" value="carga">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e10" edge="1" parent="1" source="mem" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;endSize=6;strokeWidth=1.4;strokeColor=#1c1d1f;fontSize=11;fontColor=#74777c;labelBackgroundColor=#ffffff;fontFamily=IBM Plex Mono;fontSource=https%3A%2F%2Ffonts.googleapis.com%2Fcss%3Ffamily%3DIBM%2BPlex%2BMono;" target="api" value="mismo orden i">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e11" edge="1" parent="1" source="api" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;endSize=6;strokeWidth=1.4;strokeColor=#1c1d1f;fontSize=11;fontColor=#74777c;labelBackgroundColor=#ffffff;fontFamily=IBM Plex Mono;fontSource=https%3A%2F%2Ffonts.googleapis.com%2Fcss%3Ffamily%3DIBM%2BPlex%2BMono;" target="web" value="P[i] ↔ D.ids[i]">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e12" edge="1" parent="1" source="rd" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;endSize=6;strokeWidth=1.4;strokeColor=#74777c;fontSize=11;fontColor=#74777c;labelBackgroundColor=#ffffff;fontFamily=IBM Plex Mono;fontSource=https%3A%2F%2Ffonts.googleapis.com%2Fcss%3Ffamily%3DIBM%2BPlex%2BMono;dashed=1;dashPattern=5 4;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.75;entryDx=0;entryDy=0;" target="mem" value="video nuevo: transform">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e13" edge="1" parent="1" source="rc" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;endSize=6;strokeWidth=1.4;strokeColor=#74777c;fontSize=11;fontColor=#74777c;labelBackgroundColor=#ffffff;fontFamily=IBM Plex Mono;fontSource=https%3A%2F%2Ffonts.googleapis.com%2Fcss%3Ffamily%3DIBM%2BPlex%2BMono;dashed=1;dashPattern=5 4;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=1;entryDx=0;entryDy=0;" target="rd" value="vector del video nuevo">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="leg_line" parent="1" style="line;html=1;strokeColor=#9a9ea4;" value="" vertex="1">
+          <mxGeometry height="10" width="1280" x="20" y="572" as="geometry" />
+        </mxCell>
+        <mxCell id="leg_K" parent="1" style="text;html=1;align=left;verticalAlign=middle;fontSize=12;fontColor=#1c1d1f;fontFamily=IBM Plex Mono;fontSource=https%3A%2F%2Ffonts.googleapis.com%2Fcss%3Ffamily%3DIBM%2BPlex%2BMono;" value="&lt;b style=&quot;color:#c0392b&quot;&gt;K&lt;/b&gt; clave" vertex="1">
+          <mxGeometry height="20" width="70" x="20" y="588" as="geometry" />
+        </mxCell>
+        <mxCell id="leg_V" parent="1" style="text;html=1;align=left;verticalAlign=middle;fontSize=12;fontColor=#1c1d1f;fontFamily=IBM Plex Mono;fontSource=https%3A%2F%2Ffonts.googleapis.com%2Fcss%3Ffamily%3DIBM%2BPlex%2BMono;" value="&lt;b style=&quot;color:#2456b8&quot;&gt;V&lt;/b&gt; vector" vertex="1">
+          <mxGeometry height="20" width="78" x="100" y="588" as="geometry" />
+        </mxCell>
+        <mxCell id="leg_C" parent="1" style="text;html=1;align=left;verticalAlign=middle;fontSize=12;fontColor=#1c1d1f;fontFamily=IBM Plex Mono;fontSource=https%3A%2F%2Ffonts.googleapis.com%2Fcss%3Ffamily%3DIBM%2BPlex%2BMono;" value="&lt;b style=&quot;color:#1e8449&quot;&gt;C&lt;/b&gt; coordenada" vertex="1">
+          <mxGeometry height="20" width="110" x="188" y="588" as="geometry" />
+        </mxCell>
+        <mxCell id="leg_T" parent="1" style="text;html=1;align=left;verticalAlign=middle;fontSize=12;fontColor=#1c1d1f;fontFamily=IBM Plex Mono;fontSource=https%3A%2F%2Ffonts.googleapis.com%2Fcss%3Ffamily%3DIBM%2BPlex%2BMono;" value="&lt;b style=&quot;color:#9a6a10&quot;&gt;T&lt;/b&gt; texto" vertex="1">
+          <mxGeometry height="20" width="70" x="308" y="588" as="geometry" />
+        </mxCell>
+        <mxCell id="leg_G" parent="1" style="text;html=1;align=left;verticalAlign=middle;fontSize=12;fontColor=#1c1d1f;fontFamily=IBM Plex Mono;fontSource=https%3A%2F%2Ffonts.googleapis.com%2Fcss%3Ffamily%3DIBM%2BPlex%2BMono;" value="&lt;b style=&quot;color:#8e44ad&quot;&gt;G&lt;/b&gt; grupo" vertex="1">
+          <mxGeometry height="20" width="70" x="388" y="588" as="geometry" />
+        </mxCell>
+        <mxCell id="leg_N" parent="1" style="text;html=1;align=left;verticalAlign=middle;fontSize=12;fontColor=#1c1d1f;fontFamily=IBM Plex Mono;fontSource=https%3A%2F%2Ffonts.googleapis.com%2Fcss%3Ffamily%3DIBM%2BPlex%2BMono;" value="&lt;b style=&quot;color:#3d7080&quot;&gt;N&lt;/b&gt; número" vertex="1">
+          <mxGeometry height="20" width="78" x="468" y="588" as="geometry" />
+        </mxCell>
+        <mxCell id="leg_M" parent="1" style="text;html=1;align=left;verticalAlign=middle;fontSize=12;fontColor=#1c1d1f;fontFamily=IBM Plex Mono;fontSource=https%3A%2F%2Ffonts.googleapis.com%2Fcss%3Ffamily%3DIBM%2BPlex%2BMono;" value="&lt;b style=&quot;color:#555555&quot;&gt;M&lt;/b&gt; modelo" vertex="1">
+          <mxGeometry height="20" width="78" x="556" y="588" as="geometry" />
+        </mxCell>
+        <mxCell id="leg_l0" edge="1" parent="1" style="endArrow=none;html=1;strokeWidth=1.4;strokeColor=#c0392b;" value="">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="644" y="598" as="sourcePoint" />
+            <mxPoint x="678" y="598" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="leg_t0" parent="1" style="text;html=1;align=left;verticalAlign=middle;fontSize=12;fontColor=#1c1d1f;fontFamily=IBM Plex Mono;fontSource=https%3A%2F%2Ffonts.googleapis.com%2Fcss%3Ffamily%3DIBM%2BPlex%2BMono;" value="une por youtube_id" vertex="1">
+          <mxGeometry height="20" width="164" x="684" y="588" as="geometry" />
+        </mxCell>
+        <mxCell id="leg_l1" edge="1" parent="1" style="endArrow=none;html=1;strokeWidth=1.4;strokeColor=#1c1d1f;" value="">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="864" y="598" as="sourcePoint" />
+            <mxPoint x="898" y="598" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="leg_t1" parent="1" style="text;html=1;align=left;verticalAlign=middle;fontSize=12;fontColor=#1c1d1f;fontFamily=IBM Plex Mono;fontSource=https%3A%2F%2Ffonts.googleapis.com%2Fcss%3Ffamily%3DIBM%2BPlex%2BMono;" value="une por posición i" vertex="1">
+          <mxGeometry height="20" width="164" x="904" y="588" as="geometry" />
+        </mxCell>
+        <mxCell id="leg_l2" edge="1" parent="1" style="endArrow=none;html=1;strokeWidth=1.4;strokeColor=#74777c;dashed=1;dashPattern=5 4;" value="">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="1084" y="598" as="sourcePoint" />
+            <mxPoint x="1118" y="598" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="leg_t2" parent="1" style="text;html=1;align=left;verticalAlign=middle;fontSize=12;fontColor=#1c1d1f;fontFamily=IBM Plex Mono;fontSource=https%3A%2F%2Ffonts.googleapis.com%2Fcss%3Ffamily%3DIBM%2BPlex%2BMono;" value="en vivo" vertex="1">
+          <mxGeometry height="20" width="76" x="1124" y="588" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

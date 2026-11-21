@@ -6,11 +6,15 @@
 - El mapa de texto incluye los videos base (YT-8M) y los recibidos por el servidor hasta ese momento.
 - El mapa de imagen (`data/maps_image/`) usa las miniaturas de los videos base. SQLite no guarda
   vectores de imagen, así que los recibidos se ubican sobre él al consultarlos.
+- Los mapas de fusión (`data/maps_imgtext/`: temprana, miniatura y texto en una sola pasada
+  del modelo; `data/maps_fusion/`: tardía, suma normalizada de los vectores de texto e imagen)
+  también usan solo los videos base, igual que el de imagen.
 
 Uso (rutina de recálculo):
   python3 remap.py                 # recalcula con todos los videos base + recibidos
   python3 remap.py --min-new 50    # solo recalcula si llegaron al menos 50 videos nuevos
   python3 remap.py --rep image     # recalcula el mapa de miniaturas
+  python3 remap.py --rep imgtext   # fusión temprana  (--rep fusion: fusión tardía)
   python3 remap.py --data data/dev # sobre los datos de prueba
 """
 
@@ -28,7 +32,7 @@ import pandas as pd
 
 from .received import ReceivedStore, store_path
 
-REPRESENTATIONS = ("text", "image")
+REPRESENTATIONS = ("text", "image", "imgtext", "fusion")
 UMAP_PARAMS = {"n_components": 3, "metric": "cosine", "n_neighbors": 15, "min_dist": 0.1, "random_state": 42}
 
 
@@ -171,7 +175,7 @@ def main():
     parser.add_argument("--min-new", type=int, default=0,
                         help="recalcula solo si llegaron al menos N videos nuevos desde el último mapa")
     parser.add_argument("--keep", type=int, default=3, help="versiones de mapa a conservar (0 = todas)")
-    parser.add_argument("--rep", default="text", choices=REPRESENTATIONS, help="mapa de texto o de miniaturas")
+    parser.add_argument("--rep", default="text", choices=REPRESENTATIONS, help="mapa de texto, de miniaturas o de fusión (imgtext = temprana, fusion = tardía)")
     args = parser.parse_args()
     build_map(args.data, min_new=args.min_new, keep=args.keep, representation=args.rep)
 
