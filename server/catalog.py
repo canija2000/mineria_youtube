@@ -52,6 +52,31 @@ def _card(metadata: dict) -> dict:
     }
 
 
+# Mapas que tienen solo los videos base. Los videos que llegan después no tienen vector en estos
+# espacios guardado en SQLite, así que se ubican al consultarlos, por sus vecinos más parecidos.
+STATIC_SPACES = {"image": "miniaturas", "imgtext": "fusión temprana", "fusion": "fusión tardía"}
+
+
+class _StaticSpace:
+    """Un mapa de solo videos base (`remap.py --rep image|imgtext|fusion`), cargado en memoria."""
+
+    def __init__(self, name: str):
+        self.name = name
+        self.ids: list[str] = []
+        self.positions: dict[str, int] = {}
+        self.vectors: np.ndarray | None = None
+        self.coordinates: np.ndarray | None = None
+        self.meta: dict = {}
+        self.cluster_ids: np.ndarray | None = None
+        self.cluster_names: list[str] = []
+        self.centroids: np.ndarray | None = None
+        self.cache = None   # (versión, payload de /map)
+
+    @property
+    def ready(self) -> bool:
+        return bool(self.ids) and self.vectors is not None and self.coordinates is not None
+
+
 class VideoCatalog:
     def __init__(self, data_dir="data"):
         self.data_dir = Path(data_dir)
@@ -79,19 +104,12 @@ class VideoCatalog:
         self._build_category_centroids()
         self._build_folksonomy_vocab(metadata)
 
-        self.image_ids: list[str] = []
-        self.image_positions: dict[str, int] = {}
-        self.image_vectors: np.ndarray | None = None
-        self.image_coordinates: np.ndarray | None = None
-        self.image_meta: dict = {}
-        self.image_cluster_ids: np.ndarray | None = None
-        self.image_cluster_names: list[str] = []
-        self.image_centroids: np.ndarray | None = None
-        self._load_image_space()
+        self.spaces = {name: _StaticSpace(name) for name in STATIC_SPACES}
+        for name in self.spaces:
+            self._load_static_space(name)
 
         self.map_meta: dict = {}
         self._map_cache = None
-        self._image_map_cache = None
         self._load_map()
 
     def _load_verticals(self, metadata: pd.DataFrame) -> dict[str, str]:
@@ -199,28 +217,31 @@ class VideoCatalog:
 
     # ---------- carga del mapa y armado del catálogo ----------
 
-    def _load_image_space(self) -> None:
-        """Carga los vectores de miniatura de los videos base y su mapa UMAP 3D (`remap.py --rep image`)."""
-        if current_info(self.data_dir, "image") is None:
-            print("[catálogo] sin mapa de miniaturas; calcúlalo con: python3 remap.py --rep image", flush=True)
+    def _load_static_space(self, name: str) -> None:
+        """Carga los vectores de los videos base y el mapa UMAP 3D de un espacio (`remap.py --rep <name>`)."""
+        label = STATIC_SPACES[name]
+        if current_info(self.data_dir, name) is None:
+            print(f"[catálogo] sin mapa de {label}; calcúlalo con: python3 remap.py --rep {name}", flush=True)
             return
-        # Las imágenes se ubican por sus vecinos, así que el molde UMAP de este mapa no se usa
-        meta, coords, _ = load_current(self.data_dir, "image", with_reducer=False)
-        ids, vectors = load_base_vectors(self.data_dir, "image")
+        # Los videos nuevos se ubican por sus vecinos, así que el molde UMAP de este mapa no se usa
+        meta, coords, _ = load_current(self.data_dir, name, with_reducer=False)
+        ids, vectors = load_base_vectors(self.data_dir, name)
         coords = coords.set_index("youtube_id").reindex(ids)
         keep = coords["x"].notna().to_numpy()
-        self.image_meta = meta
-        self.image_ids = [video_id for video_id, ok in zip(ids, keep) if ok]
-        self.image_positions = {yid: i for i, yid in enumerate(self.image_ids)}
-        self.image_vectors = vectors[keep]
-        self.image_coordinates = coords.loc[keep, ["x", "y", "z"]].to_numpy(dtype=np.float32)
-        loaded = map_clusters.load(maps_dir(self.data_dir, "image") / meta["version"])
+        space = _StaticSpace(name)
+        space.meta = meta
+        space.ids = [video_id for video_id, ok in zip(ids, keep) if ok]
+        space.positions = {yid: i for i, yid in enumerate(space.ids)}
+        space.vectors = vectors[keep]
+        space.coordinates = coords.loc[keep, ["x", "y", "z"]].to_numpy(dtype=np.float32)
+        loaded = map_clusters.load(maps_dir(self.data_dir, name) / meta["version"])
         if loaded:
-            table, self.image_centroids, summary = loaded
+            table, space.centroids, summary = loaded
             cluster_of = dict(zip(table["youtube_id"], table["cluster"]))
-            self.image_cluster_ids = np.array([cluster_of.get(i, -1) for i in self.image_ids], dtype=np.int16)
-            self.image_cluster_names = [c["name"] for c in sorted(summary, key=lambda c: c["id"])]
-        print(f"[catálogo] mapa de miniaturas {meta['version']}: {len(self.image_ids):,} videos", flush=True)
+            space.cluster_ids = np.array([cluster_of.get(i, -1) for i in space.ids], dtype=np.int16)
+            space.cluster_names = [c["name"] for c in sorted(summary, key=lambda c: c["id"])]
+        self.spaces[name] = space
+        print(f"[catálogo] mapa de {label} {meta['version']}: {len(space.ids):,} videos", flush=True)
 
     def _load_map(self):
         meta, coords, reducer = load_current(self.data_dir)
@@ -283,8 +304,8 @@ class VideoCatalog:
         return int(np.argmax(self.map_clusters[1] @ vector))
 
     def _cluster_at(self, i: int, space: str = "text") -> str | None:
-        """Nombre del grupo HDBSCAN del punto i del espacio (texto o imagen)."""
-        ids, names = ((self.image_cluster_ids, self.image_cluster_names) if space == "image"
+        """Nombre del grupo HDBSCAN del punto i del espacio (texto, imagen o fusión)."""
+        ids, names = ((self.spaces[space].cluster_ids, self.spaces[space].cluster_names) if space in self.spaces
                       else (self.cluster_ids, self.cluster_names))
         if ids is None or not names or ids[i] < 0:
             return None
@@ -292,20 +313,21 @@ class VideoCatalog:
 
     def _nearest_cluster(self, vector: np.ndarray, space: str = "text") -> str | None:
         """Grupo HDBSCAN de un vector que no está en el mapa: el del centroide más parecido."""
-        if space == "image":
-            if self.image_centroids is None or not self.image_cluster_names:
+        if space in self.spaces:
+            sp = self.spaces[space]
+            if sp.centroids is None or not sp.cluster_names:
                 return None
-            return self.image_cluster_names[int(np.argmax(self.image_centroids @ vector))]
+            return sp.cluster_names[int(np.argmax(sp.centroids @ vector))]
         k = self._cluster_for(vector)
         return self.cluster_names[k] if k >= 0 else None
 
     def refresh_map(self):
         """Si `remap.py` publicó un mapa nuevo o entraron lotes en SQLite (`--modern`), actualiza el catálogo."""
-        latest_image = current_info(self.data_dir, "image")
-        if latest_image and latest_image["version"] != self.image_meta.get("version"):
-            with self.lock:
-                self._load_image_space()
-                self._image_map_cache = None
+        for name, space in self.spaces.items():
+            latest_static = current_info(self.data_dir, name)
+            if latest_static and latest_static["version"] != space.meta.get("version"):
+                with self.lock:
+                    self._load_static_space(name)
         latest = current_info(self.data_dir)
         store_count = self.store.count()
         if (latest and latest["version"] != self.map_meta["version"]) or (store_count != self._last_store_count):
@@ -338,40 +360,41 @@ class VideoCatalog:
         Se guarda en memoria hasta que cambie el mapa o llegue un video nuevo.
         """
         with self.lock:
-            if representation == "image" and self.image_ids and self.image_coordinates is not None:
-                if self._image_map_cache and self._image_map_cache[0] == self.image_meta["version"]:
-                    return self._image_map_cache[1]
+            sp = self.spaces.get(representation)
+            if sp is not None and sp.ready:
+                if sp.cache and sp.cache[0] == sp.meta["version"]:
+                    return sp.cache[1]
                 vertical_counts = Counter(
-                    self.verticals.get(i) for i in self.image_ids
+                    self.verticals.get(i) for i in sp.ids
                     if self.verticals.get(i) and self.verticals.get(i) != "(Unknown)"
                 )
                 vertical_names = [name for name, _ in vertical_counts.most_common() if name]
-                if any(self.verticals.get(i) == "(Unknown)" for i in self.image_ids):
+                if any(self.verticals.get(i) == "(Unknown)" for i in sp.ids):
                     vertical_names.append("(Unknown)")
                 vertical_index = {name: i for i, name in enumerate(vertical_names)}
-                coords = np.round(self.image_coordinates.astype(float), 4)
+                coords = np.round(sp.coordinates.astype(float), 4)
                 payload = {
-                    "map_version": self.image_meta["version"],
-                    "representation": "image",
-                    "videos": len(self.image_ids),
+                    "map_version": sp.meta["version"],
+                    "representation": representation,
+                    "videos": len(sp.ids),
                     "verticals": vertical_names,
                     "sources": ["yt8m"],
                     "points": {
-                        "youtube_id": list(self.image_ids),
+                        "youtube_id": list(sp.ids),
                         "x": coords[:, 0].tolist(),
                         "y": coords[:, 1].tolist(),
                         "z": coords[:, 2].tolist(),
-                        "title": [self.metadata.get(i, {}).get("title", "") for i in self.image_ids],
-                        "channel_title": [self.metadata.get(i, {}).get("channel_title", "") for i in self.image_ids],
-                        "vertical": [vertical_index.get(self.verticals.get(i, ""), -1) for i in self.image_ids],
-                        "source": [0] * len(self.image_ids),
-                        "in_map": [True] * len(self.image_ids),
-                        "cluster": (self.image_cluster_ids.tolist() if self.image_cluster_ids is not None
-                                    else [-1] * len(self.image_ids)),
+                        "title": [self.metadata.get(i, {}).get("title", "") for i in sp.ids],
+                        "channel_title": [self.metadata.get(i, {}).get("channel_title", "") for i in sp.ids],
+                        "vertical": [vertical_index.get(self.verticals.get(i, ""), -1) for i in sp.ids],
+                        "source": [0] * len(sp.ids),
+                        "in_map": [True] * len(sp.ids),
+                        "cluster": (sp.cluster_ids.tolist() if sp.cluster_ids is not None
+                                    else [-1] * len(sp.ids)),
                     },
-                    "clusters": self.image_cluster_names,
+                    "clusters": sp.cluster_names,
                 }
-                self._image_map_cache = (self.image_meta["version"], payload)
+                sp.cache = (sp.meta["version"], payload)
                 return payload
 
             key = (self.map_meta["version"], len(self.ids))
@@ -542,41 +565,46 @@ class VideoCatalog:
                 ],
             }
 
-    def describe_image(
+    def describe_static(
         self,
         video_id: str,
+        space: str = "image",
         metadata: dict | None = None,
-        image_vector: np.ndarray | None = None,
+        vector: np.ndarray | None = None,
         neighbor_count: int = 12,
     ) -> dict:
-        """Describe un video en el espacio visual (miniatura) y devuelve sus vecinos y lejanos visuales."""
+        """Describe un video en un mapa de solo videos base (imagen o fusión): vecinos y lejanos en ese espacio.
+
+        Si el video no está en ese mapa, `vector` es su vector en ese espacio y se ubica por sus vecinos.
+        """
         with self.lock:
-            if self.image_vectors is None or self.image_coordinates is None or not self.image_ids:
+            sp = self.spaces[space]
+            if not sp.ready:
                 return self.describe(video_id, neighbor_count=neighbor_count)
 
             if metadata is not None and video_id not in self.metadata:
                 self.metadata[video_id] = _card(metadata)
 
-            in_image_map = video_id in self.image_positions
-            if in_image_map:
-                pos = self.image_positions[video_id]
-                vec = self.image_vectors[pos]
-                coord = self.image_coordinates[pos].astype(float).tolist()
-                similarities = self.image_vectors @ vec
+            in_space_map = video_id in sp.positions
+            if in_space_map:
+                pos = sp.positions[video_id]
+                vec = sp.vectors[pos]
+                coord = sp.coordinates[pos].astype(float).tolist()
+                similarities = sp.vectors @ vec
                 nearest_sims = similarities.copy()
                 nearest_sims[pos] = -np.inf
                 nearest = np.argsort(-nearest_sims)[:neighbor_count]
                 farthest_sims = similarities.copy()
                 farthest_sims[pos] = np.inf
-            elif image_vector is not None:
-                vec = np.asarray(image_vector, dtype=np.float32).reshape(-1)
+            elif vector is not None:
+                vec = np.asarray(vector, dtype=np.float32).reshape(-1)
                 vec /= max(float(np.linalg.norm(vec)), 1e-12)
-                similarities = self.image_vectors @ vec
+                similarities = sp.vectors @ vec
                 nearest = np.argsort(-similarities)[:neighbor_count]
                 top_k = nearest[:15]
                 weights = np.clip(similarities[top_k], 0.01, None)
                 weights /= weights.sum()
-                coord = (self.image_coordinates[top_k] * weights[:, None]).sum(axis=0).astype(float).tolist()
+                coord = (sp.coordinates[top_k] * weights[:, None]).sum(axis=0).astype(float).tolist()
                 farthest_sims = similarities.copy()
             else:
                 return self.describe(video_id, neighbor_count=neighbor_count)
@@ -585,7 +613,7 @@ class VideoCatalog:
             farthest = []
             seen_verticals = set()
             for i in far_pool:
-                v = self.verticals.get(self.image_ids[i])
+                v = self.verticals.get(sp.ids[i])
                 if v and v not in seen_verticals:
                     seen_verticals.add(v)
                     farthest.append(i)
@@ -600,9 +628,9 @@ class VideoCatalog:
                             break
 
             neighbor_verticals = [
-                self.verticals.get(self.image_ids[i])
+                self.verticals.get(sp.ids[i])
                 for i in nearest
-                if self.verticals.get(self.image_ids[i])
+                if self.verticals.get(sp.ids[i])
             ]
             vote_counts = Counter(neighbor_verticals).most_common()
             predicted_vertical = vote_counts[0][0] if vote_counts else None
@@ -614,40 +642,40 @@ class VideoCatalog:
             }
 
             return {
-                "map_version": self.image_meta.get("version"),
-                "representation": "image",
+                "map_version": sp.meta.get("version"),
+                "representation": space,
                 "video": {
                     "youtube_id": video_id,
                     **self.metadata.get(video_id, {}),
                     "vertical": self.verticals.get(video_id),
-                    "cluster": (self._cluster_at(self.image_positions[video_id], "image") if in_image_map
-                                else self._nearest_cluster(vec, "image")),
+                    "cluster": (self._cluster_at(sp.positions[video_id], space) if in_space_map
+                                else self._nearest_cluster(vec, space)),
                     "predicted_vertical": predicted_vertical,
                     "knn_votes": knn_votes,
                     "zero_shot_tags": self._predict_zero_shot(vec),
                     "source": "yt8m" if video_id in self.base_set else "recibido",
-                    "in_map": in_image_map,
+                    "in_map": in_space_map,
                 },
                 "projection": coord,
                 "neighbors": [
                     {
-                        "youtube_id": self.image_ids[i],
-                        **self.metadata.get(self.image_ids[i], {}),
-                        "vertical": self.verticals.get(self.image_ids[i]),
-                        "cluster": self._cluster_at(i, "image"),
+                        "youtube_id": sp.ids[i],
+                        **self.metadata.get(sp.ids[i], {}),
+                        "vertical": self.verticals.get(sp.ids[i]),
+                        "cluster": self._cluster_at(i, space),
                         "similarity": float(similarities[i]),
-                        "projection": self.image_coordinates[i].astype(float).tolist(),
+                        "projection": sp.coordinates[i].astype(float).tolist(),
                     }
                     for i in nearest
                 ],
                 "farthest": [
                     {
-                        "youtube_id": self.image_ids[i],
-                        **self.metadata.get(self.image_ids[i], {}),
-                        "vertical": self.verticals.get(self.image_ids[i]),
-                        "cluster": self._cluster_at(i, "image"),
+                        "youtube_id": sp.ids[i],
+                        **self.metadata.get(sp.ids[i], {}),
+                        "vertical": self.verticals.get(sp.ids[i]),
+                        "cluster": self._cluster_at(i, space),
                         "similarity": float(similarities[i]),
-                        "projection": self.image_coordinates[i].astype(float).tolist(),
+                        "projection": sp.coordinates[i].astype(float).tolist(),
                     }
                     for i in farthest
                 ],
@@ -748,10 +776,11 @@ class VideoCatalog:
             vec = np.asarray(image_vector, dtype=np.float32).reshape(-1)
             vec /= max(float(np.linalg.norm(vec)), 1e-12)
 
-            if self.image_vectors is not None and self.image_coordinates is not None and self.image_ids:
-                ids_pool = self.image_ids
-                coords_pool = self.image_coordinates
-                similarities = self.image_vectors @ vec
+            image = self.spaces["image"]
+            if image.ready:
+                ids_pool = image.ids
+                coords_pool = image.coordinates
+                similarities = image.vectors @ vec
                 space = "image"
             else:
                 ids_pool = self.ids
@@ -798,7 +827,7 @@ class VideoCatalog:
             }
 
             return {
-                "map_version": self.image_meta.get("version"),
+                "map_version": image.meta.get("version"),
                 "representation": "image",
                 "external_image": {
                     "label": label,

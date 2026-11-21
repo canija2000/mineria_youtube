@@ -73,6 +73,12 @@ class ReceivedStore:
                  "vector": np.frombuffer(blob, dtype=np.float32).copy(), "received_at": received_at}
                 for video_id, metadata_json, blob, received_at in rows]
 
+    def get(self, youtube_id: str) -> dict | None:
+        """Metadatos completos de un video recibido (con tags y descripción), o None si no está."""
+        with closing(self._connect()) as db:
+            row = db.execute("SELECT metadata_json FROM received WHERE youtube_id = ?", (youtube_id,)).fetchone()
+        return json.loads(row[0]) if row else None
+
     def count(self) -> int:
         with closing(self._connect()) as db:
             return db.execute("SELECT COUNT(*) FROM received").fetchone()[0]

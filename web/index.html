@@ -580,8 +580,8 @@
       <div class="proj">
         <label id="rep-text" class="on" onclick="switchRepresentation('text')"><span></span>Texto<small id="count-text">—</small></label>
         <label id="rep-image" onclick="switchRepresentation('image')"><span></span>Imagen<small id="count-image">—</small></label>
-        <label class="disabled" title="Próximamente"><span></span>Fusión temprana</label>
-        <label class="disabled" title="Próximamente"><span></span>Fusión tardía</label>
+        <label id="rep-imgtext" onclick="switchRepresentation('imgtext')" title="Miniatura y texto en una sola pasada del modelo"><span></span>Fusión temprana<small id="count-imgtext">—</small></label>
+        <label id="rep-fusion" onclick="switchRepresentation('fusion')" title="Suma normalizada de los vectores de texto e imagen"><span></span>Fusión tardía<small id="count-fusion">—</small></label>
       </div>
       <div><h4>Colorear por</h4></div>
       <div class="color-by" id="color-by">
@@ -609,6 +609,12 @@ const API_BASE = (window.location.origin === 'null' || window.location.protocol 
 // D se llena con la respuesta de /map (applyMapPayload)
 let D = { cats: [], ids: [], titles: [], cat: [], pts: [], info: {}, parts: { vertical: { cats: [], cat: [] }, cluster: null } };
 let currentRepresentation = 'text';
+const REPRESENTATIONS = {
+  text:    { label: 'Texto',               space: 'espacio textual' },
+  image:   { label: 'Imagen (Miniaturas)', space: 'espacio visual' },
+  imgtext: { label: 'Fusión temprana',     space: 'fusión temprana' },
+  fusion:  { label: 'Fusión tardía',       space: 'fusión tardía' },
+};
 const PALETTE = ['#4DA3FF', '#E2A336', '#D96B62', '#68B87A', '#9D7FE8', '#D97EB0', '#54B8B1', '#E08258', '#869CEB', '#C4BE62',
   '#2F7FD8', '#B97F1E', '#B04A42', '#478F57', '#7558C4', '#B0588A', '#2F928B', '#B85F37', '#5E74C4', '#9C9640'];
 // Colorear por categoría de YouTube ('vertical') o por grupo HDBSCAN ('cluster')
@@ -822,18 +828,18 @@ function applyMapPayload(data, rep) {
   activeCatFilter = null;
   scene.remove(base);
   all = [...P.keys()];
-  base = cloud(all, i => colorOf(D.cat[i]), rep === 'image' ? 0.19 : 0.15, 0.85);
+  base = cloud(all, i => colorOf(D.cat[i]), rep === 'text' ? 0.15 : 0.19, 0.85);
   scene.add(base);
 
   updateLegend();
 
-  const repLabel = rep === 'image' ? 'Imagen (Miniaturas)' : 'Texto';
+  const repLabel = REPRESENTATIONS[rep].label;
   const metaTag = document.querySelector('.meta');
   if (metaTag) metaTag.textContent = `${D.ids.length.toLocaleString('es-CL')} videos · ${repLabel} · UMAP 3D`;
-  const countEl = document.getElementById(rep === 'image' ? 'count-image' : 'count-text');
+  const countEl = document.getElementById(`count-${rep}`);
   if (countEl) countEl.textContent = D.ids.length.toLocaleString('es-CL');
   const tag = document.querySelector('.tag');
-  if (tag) tag.textContent = `${rep === 'image' ? 'espacio visual' : 'espacio textual'} · v${data.map_version}`;
+  if (tag) tag.textContent = `${REPRESENTATIONS[rep].space} · v${data.map_version}`;
 }
 
 async function loadServerMap(rep = 'text') {
@@ -870,11 +876,10 @@ async function refreshAfterAdd() {
 }
 
 async function switchRepresentation(rep) {
-  if (rep !== 'text' && rep !== 'image') return;
+  if (!REPRESENTATIONS[rep]) return;
   if (currentRepresentation === rep) return;
   currentRepresentation = rep;
-  document.getElementById('rep-text').classList.toggle('on', rep === 'text');
-  document.getElementById('rep-image').classList.toggle('on', rep === 'image');
+  for (const r of Object.keys(REPRESENTATIONS)) document.getElementById(`rep-${r}`).classList.toggle('on', r === rep);
   clearResult();
   await loadServerMap(rep);
   setCamera(new THREE.Vector3(), 30);
@@ -1396,7 +1401,7 @@ function showRealVideoResult(data) {
       <div class="vid">
         <div class="cat-header">
           <h4>1 · Video y metadatos</h4>
-          <span class="cat-method">${currentRepresentation === 'image' ? 'espacio imagen' : 'espacio texto'}</span>
+          <span class="cat-method">${REPRESENTATIONS[currentRepresentation].space}</span>
         </div>
         <a class="vid-thumb-link" href="${ytUrl}" target="_blank" title="Abrir en YouTube">
           <img src="${thumbUrl}" alt="" onerror="this.src='https://i.ytimg.com/vi/${yid}/hqdefault.jpg'">
@@ -1653,6 +1658,8 @@ function focusNeighbor(nbId, coords, btnEl) {
 }
 
 async function runConcept(query) {
+  // conceptos y perfiles se ubican en el espacio de texto
+  if (currentRepresentation !== 'text') await switchRepresentation('text');
   clearResult();
   loading('concept', 0);
   let step = 0;
@@ -1998,6 +2005,8 @@ function showRealProfileResult(data) {
 }
 
 async function runRealProfile(query) {
+  // conceptos y perfiles se ubican en el espacio de texto
+  if (currentRepresentation !== 'text') await switchRepresentation('text');
   clearResult();
   loading('profile', 0);
   let step = 0;

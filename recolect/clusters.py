@@ -36,7 +36,7 @@ MIN_CLUSTER_SIZE = 220   # grupos grandes y legibles
 MIN_SAMPLES = 30         # más alto = más puntos quedan como ruido
 # El mapa de miniaturas es más continuo: con "eom" HDBSCAN lo deja casi en un solo grupo,
 # así que ahí se eligen las hojas del árbol de densidad (~40 grupos, como en texto).
-SELECTION = {"text": "eom", "image": "leaf"}
+SELECTION = {"text": "eom", "image": "leaf", "imgtext": "eom", "fusion": "eom"}
 # Etiquetas de YT-8M: se descarta este % de las más parecidas en promedio a todos los grupos,
 # y de las demás se usan solo las que superan a su promedio por al menos MIN_SPECIFICITY.
 # Calibrado en el mapa de nov-2026: los nombres sin sentido ("Ale", "Pub") quedaban bajo 0,03.
@@ -161,7 +161,7 @@ def cluster_current(data_dir="data", representation="text") -> None:
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--data", default="data", help="carpeta de datos (data o data/dev)")
-    parser.add_argument("--rep", default="text", choices=("text", "image"), help="mapa de texto o de miniaturas")
+    parser.add_argument("--rep", default="text", choices=("text", "image", "imgtext", "fusion"), help="mapa de texto, de miniaturas o de fusión")
     args = parser.parse_args()
     cluster_current(args.data, args.rep)
 

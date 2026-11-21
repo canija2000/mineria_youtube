@@ -8,6 +8,7 @@ from pathlib import Path
 import re
 from urllib.parse import parse_qs, urlparse
 
+import numpy as np
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
@@ -25,7 +26,7 @@ URL_RE = re.compile(r"(?:youtu\.be/|youtube\.com/(?:watch\?v=|embed/|shorts/))([
 
 class AddVideoRequest(BaseModel):
     video: str = Field(min_length=11, max_length=2048, description="ID o URL de YouTube")
-    representation: str = Field(default="text", description="Espacio de representación: text o image")
+    representation: str = Field(default="text", description="Espacio de representación: text, image, imgtext (fusión temprana) o fusion (fusión tardía)")
 
 
 class ConceptRequest(BaseModel):
@@ -94,7 +95,7 @@ def health():
 
 @app.get("/map")
 def get_map(rep: str = "text"):
-    """Todos los puntos del mapa vigente (texto o imagen) para que la web los dibuje."""
+    """Todos los puntos del mapa vigente (texto, imagen o fusión) para que la web los dibuje."""
     catalog = app.state.catalog
     catalog.refresh_map()
     return catalog.map_payload(representation=rep)
@@ -147,6 +148,26 @@ def _encode_video_thumbnail(video_id: str, embedder: TextEmbedder):
     return embedder.encode([{"image": [str(thumb_path)]}], batch_size=1, prompt_name=None)[0]
 
 
+def _unit(vector) -> np.ndarray:
+    vector = np.asarray(vector, dtype=np.float32).reshape(-1)
+    return vector / max(float(np.linalg.norm(vector)), 1e-12)
+
+
+def _space_vector(rep: str, video_id: str, metadata: dict, catalog: VideoCatalog) -> np.ndarray:
+    """Vector de un video en un mapa de solo videos base, calculado igual que en recolect/modalities.py."""
+    embedder = app.state.embedder
+    if rep == "image":
+        return _encode_video_thumbnail(video_id, embedder)
+    if rep == "imgtext":   # fusión temprana: miniatura y texto en una sola pasada del modelo
+        thumb_path = _save_thumbnail(video_id)
+        embedder.enable_images()
+        return embedder.encode([{"text": f"task: clustering | query: <|image|> {build_text(metadata)}",
+                                 "image": [str(thumb_path)]}], batch_size=1, prompt_name=None)[0]
+    # fusión tardía: suma normalizada del vector de texto (ya en el catálogo) y el de la miniatura
+    text_vector = catalog.vectors[catalog.positions[video_id]]
+    return _unit(_unit(text_vector) + _unit(_encode_video_thumbnail(video_id, embedder)))
+
+
 @app.post("/videos", status_code=201)
 def add_video(payload: AddVideoRequest):
     video_id = parse_video_id(payload.video)
@@ -154,16 +175,17 @@ def add_video(payload: AddVideoRequest):
     catalog = app.state.catalog
     catalog.refresh_map()
 
-    if rep == "image":
-        if video_id in catalog.image_positions:
-            return catalog.describe_image(video_id)
+    if rep in catalog.spaces:
+        if video_id in catalog.spaces[rep].positions:
+            return catalog.describe_static(video_id, rep)
         try:
-            metadata = catalog.metadata.get(video_id) or fetch_video(video_id)
+            # metadatos completos (con tags): del catálogo de recibidos si ya llegó antes, si no de la API
+            metadata = catalog.store.get(video_id) or fetch_video(video_id)
             if metadata is None:
                 raise HTTPException(status_code=404, detail="El video no existe o no está disponible")
             _register_video(video_id, metadata, catalog)   # queda guardado igual que en modo texto
-            img_vec = _encode_video_thumbnail(video_id, app.state.embedder)
-            return catalog.describe_image(video_id, metadata=metadata, image_vector=img_vec)
+            vector = _space_vector(rep, video_id, metadata, catalog)
+            return catalog.describe_static(video_id, rep, metadata=metadata, vector=vector)
         except HTTPException:
             raise
         except Exception as exc:

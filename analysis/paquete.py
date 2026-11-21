@@ -11,9 +11,10 @@ y el servidor solo leen lo que dejó, así que basta con compartir esos archivos
   data/webapp_catalog.sqlite3            videos recibidos por la web (notebook 01)
   data/maps/...                          mapa de texto vigente con su molde UMAP (notebook 05 y servidor)
   data/maps_image/...                    mapa de miniaturas, sin su molde UMAP (el servidor no lo usa)
+  data/maps_imgtext/, data/maps_fusion/  mapas de fusión temprana y tardía, también sin molde
 
-El servidor saca los vectores de texto e imagen del consolidado cuando no encuentra
-emb_text.parquet / emb_image.parquet (ver `recolect/mapping.py::load_base_vectors`).
+El servidor saca los vectores de cada representación del consolidado cuando no encuentra
+emb_<rep>.parquet (ver `recolect/mapping.py::load_base_vectors`).
 
 float16 basta: el error por coordenada es < 0,0002, hit@k del zero-shot da igual a 4
 decimales y los 5 vecinos más cercanos coinciden en más del 99 % de los casos.
@@ -63,7 +64,10 @@ def archivos_de_mapa(carpeta: str, con_molde: bool) -> list[Path]:
 
 
 def main():
-    archivos = archivos_de_mapa("maps", con_molde=True) + archivos_de_mapa("maps_image", con_molde=False)
+    archivos = archivos_de_mapa("maps", con_molde=True)
+    for carpeta in ("maps_image", "maps_imgtext", "maps_fusion"):
+        if (DATA / carpeta / "current.json").exists():
+            archivos += archivos_de_mapa(carpeta, con_molde=False)
 
     with tempfile.TemporaryDirectory() as tmp:
         consolidado = Path(tmp) / "embeddings_consolidated.parquet"

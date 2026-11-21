@@ -25,9 +25,12 @@ try:
     z = zipfile.ZipFile("mineria_youtube_datos.zip")
 except FileNotFoundError:
     sys.exit(1)
-for carpeta in ("maps", "maps_image"):
+for carpeta in ("maps", "maps_image", "maps_imgtext", "maps_fusion"):
     vigente = Path(f"data/{carpeta}/current.json")
-    if vigente.exists() and json.loads(z.read(f"data/{carpeta}/current.json")) != json.loads(vigente.read_text()):
+    if not vigente.exists():
+        continue
+    if f"data/{carpeta}/current.json" not in z.namelist() or \
+            json.loads(z.read(f"data/{carpeta}/current.json")) != json.loads(vigente.read_text()):
         print(f"[paquete] el zip trae otra versión de data/{carpeta}; se rehace")
         sys.exit(1)
 EOF
